@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0B0B0D" />
+<title>黑目 · Kurodoko 黑格连通推理</title>
+<meta name="description" content="黑目 Kurodoko：涂黑格子，让每个数字正好看见它说的那许多白格。零猜测——每局唯一解、每局都能用铅笔规则推到底，难度分与档位区间都是量出来的。" />
+<!-- Inline icon: without it the browser probes the Pages domain root for /favicon.ico and logs a 404. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B0B0D'/%3E%3Crect x='4' y='4' width='11' height='11' rx='2' fill='%23F3EFE6'/%3E%3Crect x='17' y='4' width='11' height='11' rx='2'/%3E%3Crect x='4' y='17' width='11' height='11' rx='2' fill='%23F3EFE6'/%3E%3Ccircle cx='22.5' cy='22.5' r='5' fill='%23F3EFE6'/%3E%3Ctext x='22.5' y='25.6' font-size='8' text-anchor='middle' fill='%230B0B0D' font-family='monospace'%3E4%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="css/game.css" />
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>黑目</h1>
+      <p class="sub">Kuromasu · Kurodoko</p>
+    </div>
+    <div class="top-actions">
+      <button id="btn-sound" class="ghost" type="button" aria-pressed="true">音效 开</button>
+      <button id="btn-motion" class="ghost" type="button" aria-pressed="false">动效 全</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-menu" class="view">
+      <div class="menu-hero">
+        <h2>涂黑格子，让每个数字正好看见它说的那许多白格</h2>
+        <p>
+          数字写着它沿上下左右四条视线能看见几格白：视线穿过白格，遇到第一个黑格就停，数字格自己也算一格。
+          黑格不许上下左右相接，剩下的白格必须是一整块。
+          这里没有运气题：每一局都只有一个答案，每一局都能靠逻辑推到底，提示也只说推得出的那一步。
+        </p>
+      </div>
+
+      <div class="menu-cols">
+        <div class="col">
+          <h3 class="col-title">选一档</h3>
+          <div id="tier-list" class="tiers"></div>
+          <div id="resume-card" class="resume" hidden>
+            <div class="resume-txt">
+              <strong id="resume-name">未完成的牌局</strong>
+              <span id="resume-meta"></span>
+            </div>
+            <button id="btn-resume" class="primary" type="button">继续</button>
+          </div>
+        </div>
+
+        <div class="col">
+          <h3 class="col-title">纪录（同档比：先看不求提示几次，再看步数，最后看时间）</h3>
+          <ul id="record-list" class="records"></ul>
+
+          <h3 class="col-title">你会用到的五条规则</h3>
+          <ol class="rules">
+            <li><b>带字即白</b>：写着数字的那一格必须是白格——黑格上不写字。</li>
+            <li><b>已经看满</b>：数字的视线里白格已经数够，还没定的那一格就得涂黑。</li>
+            <li><b>非看不可</b>：四条视线全打开也刚好只有这些，那几格就必须留着白。</li>
+            <li><b>黑不挨黑</b>：黑格的上下左右都不许再是黑格。</li>
+            <li><b>白不断路</b>：一涂黑就把白格劈成两截的那一格，必须是白格。</li>
+          </ol>
+          <p class="rules-note">数字数的是白格：它自己那一格，加上四条视线在第一个黑格之前穿过的每一格。后两条铅笔规则（<b>已经看满</b>/<b>非看不可</b>）只管一条视线自己的账，<b>黑不挨黑</b>和<b>白不断路</b>看的是整块盘：它们写下的每一格，在盘面的<b>每一个解</b>里都成立。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-game" class="view" hidden>
+      <div class="stage">
+        <div class="stage-head">
+          <span id="stat-name" class="puzzle-name">—</span>
+          <span id="stat-tier" class="chip">—</span>
+          <span id="stat-time" class="chip mono">00:00</span>
+        </div>
+        <div id="board-wrap">
+          <canvas id="board" data-mode="black" data-brush="ink" role="img" aria-label="黑目盘面：点按或拖动涂黑、留白"></canvas>
+          <div id="win-veil" hidden>
+            <div class="win-card">
+              <h3>每个数字都数对了</h3>
+              <p id="win-meta"></p>
+              <p id="win-record" class="win-record"></p>
+              <div class="win-actions">
+                <button id="btn-again" class="primary" type="button">再来一局</button>
+                <button id="btn-menu-2" class="ghost" type="button">回选档</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p id="state-line" class="conflict-line" aria-live="polite"></p>
+      </div>
+
+      <aside class="panel">
+        <div class="modes" role="group" aria-label="涂法">
+          <button id="btn-mode-black" class="mode" type="button" aria-pressed="true" aria-label="涂黑这一格">■ 涂黑</button>
+          <button id="btn-mode-white" class="mode" type="button" aria-pressed="false" aria-label="把这格留白">□ 留白</button>
+          <button id="btn-erase" class="mode ghost" type="button" aria-pressed="false" aria-label="擦掉已定的格：橡皮笔">⌫ 擦</button>
+        </div>
+        <div class="acts">
+          <button id="btn-hint" class="primary" type="button">提示<span class="mono" id="hint-count">0</span></button>
+          <button id="btn-undo" class="ghost" type="button">撤销</button>
+          <button id="btn-new" class="ghost" type="button">换一局</button>
+          <button id="btn-menu" class="ghost" type="button">回选档</button>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><span>步数</span><b id="stat-moves" class="mono">0</b></div>
+          <div class="stat"><span>提示</span><b id="stat-hints" class="mono">0</b></div>
+          <div class="stat"><span>已定</span><b id="stat-filled" class="mono">0/0</b></div>
+          <div class="stat"><span>没定</span><b id="stat-remaining" class="mono">0</b></div>
+          <div class="stat"><span>看对</span><b id="stat-satisfied" class="mono">0/0</b></div>
+          <div class="stat"><span>冲突</span><b id="stat-conflicts" class="mono">0</b></div>
+          <div class="stat"><span>难度实测</span><b id="stat-score" class="mono">—</b></div>
+        </div>
+
+        <div class="hint-box">
+          <h4 id="hint-rule">提示理由</h4>
+          <p id="hint-line">按 <b>提示</b> 会说出当前能推的一格，以及它依据哪条规则。</p>
+        </div>
+
+        <div class="legend">
+          <span><i class="sw sw-paper"></i>还没定：先当它是白的</span>
+          <span><i class="sw sw-white"></i>留白：数字数得着它</span>
+          <span><i class="sw sw-black"></i>涂黑：挡视线，不挨别的黑</span>
+          <span><i class="sw sw-bad"></i>对不上：看见的白多了或不够</span>
+          <span><i class="sw sw-good"></i>数对了：这个数已经数准</span>
+        </div>
+        <p class="keyhint"><b>拖动</b> 连涂一片 · <b>从已定的格里起笔</b> 就是擦 · <b>E</b> 橡皮笔 · <b>B</b>/<b>W</b> 黑/白 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>M</b> 换笔</p>
+      </aside>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>每局唯一解 · 每局可用逻辑推到底 · 提示只给推得出的一步 — 由 <code>tools/verify.sh</code> 在真实浏览器里逐条断言。</span>
+    <button id="btn-reset" class="link" type="button">清空存档</button>
+  </footer>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
