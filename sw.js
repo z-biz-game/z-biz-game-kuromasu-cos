@@ -6,7 +6,7 @@
 // 2) 同源子资源一律**网络优先、失败退缓存**（含 js/css/图）。导航请求同理，只有断网时才回落到
 //    缓存里的 index.html。这样每次部署玩家第一跳就是新版，离线时才用上一版缓存兜底。
 
-const VERSION = 'kuromasu-v1.1.0';
+const VERSION = 'kuromasu-v1.1.1';
 const RUNTIME = `${VERSION}-runtime`;
 const CORE = [
   './',
@@ -20,6 +20,7 @@ const CORE = [
   './js/engine/generate.js',
   './js/engine/count.js',
   './js/render/board.js',
+  './js/render/anim.js',
   './js/ui/game.js',
   './manifest.webmanifest',
   './icons/favicon-32.png',
