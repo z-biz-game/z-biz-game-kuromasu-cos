@@ -1,0 +1,28 @@
+{
+  "name": "黑目 · Kurodoko 黑格连通推理",
+  "short_name": "黑目",
+  "description": "涂黑格子，让每个数字正好看见它说的那许多白格。零猜测：每局唯一解、每局都能用铅笔规则推到底。",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0B0B0D",
+  "theme_color": "#0B0B0D",
+  "categories": ["games", "puzzle"],
+  "icons": [
+    { "src": "icons/favicon-32.png", "sizes": "32x32", "type": "image/png" },
+    { "src": "icons/icon-96.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-1024.png", "sizes": "1024x1024", "type": "image/png" },
+    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "assets/og-cover.png", "sizes": "1200x630", "type": "image/png", "form_factor": "wide" }
+  ]
+}

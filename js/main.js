@@ -509,6 +509,29 @@ window.addEventListener('pagehide', flushResume);
 applyThemeVars();
 applySettings();
 renderMenu();
+registerServiceWorker();
+
+// 离线可开、可装到桌面。两条实测出来的约束：
+// * file:// 下（双击 index.html、Electron 的默认 loadFile）不注册，也不许抛未捕获异常——
+//   注册会拿到 SecurityError，整页的后续 module 代码虽然照跑，控制台里却多一条红字。
+// * 路径相对 document.baseURI 而不是写死 '/sw.js'：Pages 把这个仓发在 /z-biz-game-kuromasu-cos/
+//   之下，绝对路径会在前缀形态下 404（同组织已经因此红过一次）。
+function registerServiceWorker() {
+  try {
+    const proto = typeof location === 'undefined' ? '' : location.protocol;
+    if (proto !== 'http:' && proto !== 'https:') return false;
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return false;
+    const base = document.baseURI || location.href;
+    const url = new URL('sw.js', base).href;
+    const scope = new URL('./', base).href;
+    navigator.serviceWorker.register(url, { scope }).catch(() => {
+      /* 注册失败（无 SW 支持/被策略挡下）不影响可玩，只是离线用不了 */
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 window.kuromasu = {
   version: VERSION,

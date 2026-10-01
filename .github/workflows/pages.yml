@@ -20,14 +20,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # No bundler: the game ships plain ES modules, so the site is a file copy.
-      # Only these three paths are reachable from index.html — keeping the server,
-      # the electron shell, the harness and the docs out of the artifact also keeps
-      # node_modules out, which `path: .` would happily upload.
+      # Only the paths reachable from index.html go into the artifact — keeping the server,
+      # the electron shell, the harness and the docs out also keeps node_modules out, which
+      # `path: .` would happily upload. icons/ + assets/ + manifest + sw.js 是 2026-10-02 起
+      # 真的被 index.html 引用了（真 PNG 图标、可平铺纸纹、离线缓存），漏一个就是 404。
       - name: Assemble static site
         run: |
           mkdir _site
-          cp index.html _site/
-          cp -r css js _site/
+          cp index.html manifest.webmanifest sw.js _site/
+          cp -r css js icons assets _site/
+      - name: Every path the page and the manifest reference is in the artifact
+        run: |
+          test -f _site/manifest.webmanifest
+          test -f _site/sw.js
+          test -f _site/icons/icon-192.png
+          test -f _site/icons/icon-512.png
+          test -f _site/icons/apple-touch-icon.png
+          test -f _site/assets/textures/paper-grain.png
+          for f in $(git ls-files 'assets/ui/*.png' 'assets/sprites/*.png'); do test -f "_site/$f" || exit 1; done
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

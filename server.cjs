@@ -12,6 +12,9 @@ const TYPES = {
   '.cjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  // PWA manifest 的注册要求 MIME 是 manifest+json：落到下面的 octet-stream，Chrome 会直接
+  // 报 "Failed to load manifest"，可安装性这条判据就永远点不亮。
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
