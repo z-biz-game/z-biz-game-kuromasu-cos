@@ -1,0 +1,299 @@
+{
+ "generator": "assets/gen/make_art.py",
+ "reproduce": "python3 assets/gen/make_art.py",
+ "motif": "punched-paper-and-sight-rays",
+ "palette": {
+  "paper": "#F3EFE6",
+  "ink": "#121216",
+  "accent": "#FFC85C",
+  "night": "#0B0B0D"
+ },
+ "iconBoard": {
+  "n": 5,
+  "blacks": [
+   [
+    2,
+    0
+   ],
+   [
+    4,
+    1
+   ],
+   [
+    1,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    0,
+    4
+   ]
+  ],
+  "clues": [
+   {
+    "cell": [
+     0,
+     0
+    ],
+    "digit": 5
+   },
+   {
+    "cell": [
+     2,
+     2
+    ],
+    "digit": 6
+   },
+   {
+    "cell": [
+     4,
+     4
+    ],
+    "digit": 6
+   }
+  ]
+ },
+ "ogBoard": {
+  "n": 7,
+  "blacks": [
+   [
+    2,
+    0
+   ],
+   [
+    5,
+    1
+   ],
+   [
+    0,
+    3
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    6,
+    3
+   ],
+   [
+    1,
+    5
+   ],
+   [
+    4,
+    6
+   ]
+  ],
+  "clues": [
+   {
+    "cell": [
+     0,
+     4
+    ],
+    "digit": 9
+   },
+   {
+    "cell": [
+     3,
+     2
+    ],
+    "digit": 9
+   },
+   {
+    "cell": [
+     4,
+     3
+    ],
+    "digit": 7
+   },
+   {
+    "cell": [
+     6,
+     5
+    ],
+    "digit": 7
+   }
+  ]
+ },
+ "files": [
+  {
+   "path": "icons/icon-1024.png",
+   "w": 1024,
+   "h": 1024,
+   "bytes": 503563,
+   "note": "母图"
+  },
+  {
+   "path": "icons/icon-512.png",
+   "w": 512,
+   "h": 512,
+   "bytes": 180264,
+   "note": "母图缩放"
+  },
+  {
+   "path": "icons/icon-192.png",
+   "w": 192,
+   "h": 192,
+   "bytes": 28085,
+   "note": "母图缩放"
+  },
+  {
+   "path": "icons/icon-180.png",
+   "w": 180,
+   "h": 180,
+   "bytes": 25166,
+   "note": "母图缩放"
+  },
+  {
+   "path": "icons/icon-96.png",
+   "w": 96,
+   "h": 96,
+   "bytes": 9139,
+   "note": "母图缩放"
+  },
+  {
+   "path": "icons/icon-64.png",
+   "w": 64,
+   "h": 64,
+   "bytes": 5073,
+   "note": "母图缩放"
+  },
+  {
+   "path": "icons/icon-48.png",
+   "w": 48,
+   "h": 48,
+   "bytes": 327,
+   "note": "紧凑母题"
+  },
+  {
+   "path": "icons/icon-32.png",
+   "w": 32,
+   "h": 32,
+   "bytes": 265,
+   "note": "紧凑母题"
+  },
+  {
+   "path": "icons/icon-16.png",
+   "w": 16,
+   "h": 16,
+   "bytes": 181,
+   "note": "紧凑母题"
+  },
+  {
+   "path": "icons/icon-maskable-512.png",
+   "w": 512,
+   "h": 512,
+   "bytes": 123654,
+   "note": "maskable 80% 安全区"
+  },
+  {
+   "path": "icons/icon-maskable-192.png",
+   "w": 192,
+   "h": 192,
+   "bytes": 21740,
+   "note": "maskable 80% 安全区"
+  },
+  {
+   "path": "icons/apple-touch-icon.png",
+   "w": 180,
+   "h": 180,
+   "bytes": 25166,
+   "note": "iOS 桌面"
+  },
+  {
+   "path": "icons/favicon-32.png",
+   "w": 32,
+   "h": 32,
+   "bytes": 265,
+   "note": "favicon"
+  },
+  {
+   "path": "icons/favicon-16.png",
+   "w": 16,
+   "h": 16,
+   "bytes": 181,
+   "note": "favicon"
+  },
+  {
+   "path": "assets/og-cover.png",
+   "w": 1200,
+   "h": 630,
+   "bytes": 349430,
+   "note": "社交卡"
+  },
+  {
+   "path": "assets/textures/paper-grain.png",
+   "w": 256,
+   "h": 256,
+   "bytes": 91613,
+   "note": "可平铺纸纹（盘面上屏）"
+  },
+  {
+   "path": "assets/textures/ink-grain.png",
+   "w": 256,
+   "h": 256,
+   "bytes": 26800,
+   "note": "可平铺墨纹 RGBA（黑格上屏）"
+  },
+  {
+   "path": "assets/sprites/amber-burst.png",
+   "w": 256,
+   "h": 256,
+   "bytes": 22485,
+   "note": "光爆 sprite RGBA"
+  },
+  {
+   "path": "assets/ui/sound-on.png",
+   "w": 96,
+   "h": 96,
+   "bytes": 587,
+   "note": "HUD 字形 sound-on"
+  },
+  {
+   "path": "assets/ui/sound-off.png",
+   "w": 96,
+   "h": 96,
+   "bytes": 550,
+   "note": "HUD 字形 sound-off"
+  },
+  {
+   "path": "assets/ui/pause.png",
+   "w": 96,
+   "h": 96,
+   "bytes": 225,
+   "note": "HUD 字形 pause"
+  },
+  {
+   "path": "assets/ui/resume.png",
+   "w": 96,
+   "h": 96,
+   "bytes": 372,
+   "note": "HUD 字形 resume"
+  },
+  {
+   "path": "assets/ui/restart.png",
+   "w": 96,
+   "h": 96,
+   "bytes": 492,
+   "note": "HUD 字形 restart"
+  },
+  {
+   "path": "assets/ui/fullscreen.png",
+   "w": 96,
+   "h": 96,
+   "bytes": 272,
+   "note": "HUD 字形 fullscreen"
+  },
+  {
+   "path": "assets/ui/motion.png",
+   "w": 96,
+   "h": 96,
+   "bytes": 474,
+   "note": "HUD 字形 motion"
+  }
+ ]
+}
