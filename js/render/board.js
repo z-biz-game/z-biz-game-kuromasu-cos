@@ -19,6 +19,21 @@
 // js/ui/game.js out of the engine's diagnose() result; nothing is decided here.
 import { Palette, Cell, Radius, Font } from '../theme.js';
 import { OPEN, BLACK, WHITE, NO_CLUE } from '../engine/kuromasu.js';
+import { rippleFrac, rippleRadius, rippleAlpha, sparkOffset, age } from './anim.js';
+
+// 纹理与 sprite 都相对本模块解析：Pages 把这一盘发在 /z-biz-game-kuromasu-cos/ 前缀下，
+// 写死 '/assets/…' 会在前缀形态下 404（同组织已经因此红过一次）。
+const ASSET_BASE = new URL('../../assets/', import.meta.url);
+
+function loadImage(rel) {
+  try {
+    const img = new Image();
+    img.src = new URL(rel, ASSET_BASE).href;
+    return img;
+  } catch {
+    return null;
+  }
+}
 
 // The board is one sheet of paper: everything not punched out is white, so the layout only has to
 // fit w×h cells and a hairline border into the box it is handed.
@@ -34,6 +49,23 @@ export class BoardView {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.geo = { cell: 0, x: 0, y: 0, w: 0, h: 0, dpr: 1 };
+    // 三张图都是 assets/gen/make_art.py 现产的：纸纹铺在盘底、墨纹叠在被涂黑的格上、
+    // 光爆 sprite 给提示与胜利。没加载完之前一律走纯色——纹理是牙，不是信息载体。
+    this.tex = { paper: loadImage('textures/paper-grain.png'), ink: loadImage('textures/ink-grain.png'), burst: loadImage('sprites/amber-burst.png') };
+    this.pat = {};
+  }
+
+  pattern(key) {
+    const img = this.tex[key];
+    if (!img || !img.complete || !img.naturalWidth) return null;
+    if (this.pat[key] === undefined) {
+      try {
+        this.pat[key] = this.ctx.createPattern(img, 'repeat');
+      } catch {
+        this.pat[key] = null;
+      }
+    }
+    return this.pat[key];
   }
 
   // The backing buffer is sized in device pixels while every draw call stays in CSS pixels: one
@@ -74,7 +106,7 @@ export class BoardView {
     return gy * game.w + gx;
   }
 
-  draw(game, { pulse = null, preview = null } = {}) {
+  draw(game, { pulse = null, preview = null, anim = null } = {}) {
     this.game = game;
     const { ctx, geo } = this;
     const { cell } = geo;
@@ -87,17 +119,30 @@ export class BoardView {
     roundRect(ctx, 0, 0, geo.w, geo.h, Radius.card);
     ctx.fillStyle = Palette.paper;
     ctx.fill();
+    // 纸纹：assets/textures/paper-grain.png 的均值就压在 Palette.paper 上、逐通道限幅 ±6，
+    // 所以这一层只给纸加牙，不动 tools/scenarios.js 里"纸就是底色"那条 tol=12 的颜色判据。
+    const paperPat = this.pattern('paper');
+    if (paperPat) {
+      roundRect(ctx, 0, 0, geo.w, geo.h, Radius.card);
+      ctx.fillStyle = paperPat;
+      ctx.fill();
+    }
 
     // Squares the player has punched out. A black cell covers its whole square, which is what makes
     // "the black group" and "the white group" readable at a glance — a ring inside the cell would
     // leave a paper seam and make the shading ambiguous. Decided white needs no paint either:
     // paper *is* white, so the only mark a white cell wears is the dot that says "this one is
     // settled", and the open cells keep the bare paper. That is how the puzzle is printed.
+    const inkPat = this.pattern('ink');
     for (let t = 0; t < b.n; t++) {
       if (ink[t] !== BLACK) continue;
       const r = this.cellRect(t);
       ctx.fillStyle = Palette.shade;
       ctx.fillRect(r.x, r.y, cell, cell);
+      if (inkPat) {
+        ctx.fillStyle = inkPat;
+        ctx.fillRect(r.x, r.y, cell, cell);
+      }
     }
 
     // Settled white: a small dot in the middle, so "I decided this one" survives the black squares.
@@ -176,6 +221,8 @@ export class BoardView {
       ctx.fillText(String(b.clue[s]), r.x + cell / 2, r.y + cell / 2 + 1);
     }
 
+    if (anim) this.drawAnim(anim, cell);
+
     // What a hint just named — the only place the UI is allowed to say "look here".
     if (pulse && pulse.cell != null) {
       const r = this.cellRect(pulse.cell);
@@ -193,6 +240,51 @@ export class BoardView {
         ctx.stroke();
       }
     }
+  }
+
+  // 动画只读 `anim.clock`，一个数都不自己攒：半径/位移/透明度全是 (clock - bornAt) 的闭函数，
+  // 所以 30/60/120Hz 在同一虚拟时刻画出来的必须是一模一样的像素。
+  drawAnim(anim, cell) {
+    const { ctx } = this;
+    for (const r of anim.ripples) {
+      const rect = this.cellRect(r.cell);
+      const cx = rect.x + cell / 2;
+      const cy = rect.y + cell / 2;
+      const frac = rippleFrac(anim, r);
+      const a = rippleAlpha(frac);
+      if (a <= 0.01) continue;
+      ctx.save();
+      ctx.globalAlpha = a;
+      if (r.sprite && this.tex.burst && this.tex.burst.complete && this.tex.burst.naturalWidth) {
+        const span = cell * (1.1 + 2.6 * frac);
+        ctx.drawImage(this.tex.burst, cx - span / 2, cy - span / 2, span, span);
+      } else {
+        ctx.strokeStyle = r.color || Palette.accent;
+        ctx.lineWidth = Math.max(1.5, cell * 0.055 * (1 - frac * 0.55));
+        ctx.beginPath();
+        ctx.arc(cx, cy, rippleRadius(frac, cell), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (!anim.sparks.length) return;
+    const dpr = this.geo.dpr;
+    ctx.save();
+    ctx.fillStyle = Palette.accentEdge;
+    for (const s of anim.sparks) {
+      const o = sparkOffset(s, age(anim, s));
+      if (o.alpha <= 0.02) continue;
+      const rect = this.cellRect(s.cell);
+      ctx.save();
+      ctx.globalAlpha = o.alpha;
+      ctx.translate(rect.x + cell / 2 + o.x, rect.y + cell / 2 + o.y);
+      ctx.rotate(o.rot);
+      const w = Math.max(1.6, cell * 0.062 * s.size);
+      ctx.fillRect(-w / 2, -w / 2, w, w * 0.62);
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 }
 

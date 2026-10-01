@@ -229,14 +229,14 @@
    "path": "assets/textures/paper-grain.png",
    "w": 256,
    "h": 256,
-   "bytes": 91613,
-   "note": "可平铺纸纹（盘面上屏）"
+   "bytes": 82124,
+   "note": "可平铺纸纹（盘面上屏，去均值限幅 ±6）"
   },
   {
    "path": "assets/textures/ink-grain.png",
    "w": 256,
    "h": 256,
-   "bytes": 26800,
+   "bytes": 21663,
    "note": "可平铺墨纹 RGBA（黑格上屏）"
   },
   {

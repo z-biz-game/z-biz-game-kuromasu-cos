@@ -88,6 +88,31 @@
         </div>
         <div id="board-wrap">
           <canvas id="board" data-mode="black" data-brush="ink" role="img" aria-label="黑目盘面：点按或拖动涂黑、留白"></canvas>
+          <div id="pause-veil" hidden>
+            <div class="veil-card">
+              <h3>这一局停下了</h3>
+              <p>计时不再走字，笔也按不下去。用时与代价都停在暂停那一刻。</p>
+              <div class="win-actions">
+                <button id="btn-resume-play" class="primary" type="button">继续</button>
+                <button id="btn-help" class="ghost" type="button">看规则</button>
+              </div>
+            </div>
+          </div>
+          <div id="help-veil" hidden>
+            <div class="veil-card help-card">
+              <h3>五条规则，一遍</h3>
+              <ol class="help-rules">
+                <li><b>带字即白</b>：写着数字的格必须是白格。</li>
+                <li><b>已经看满</b>：视线里白格已经数够，还没定的那格就涂黑。</li>
+                <li><b>非看不可</b>：四条视线全打开也刚好只有这些，那几格必须留着白。</li>
+                <li><b>黑不挨黑</b>：黑格的上下左右不许再是黑格。</li>
+                <li><b>白不断路</b>：一涂黑就把白格劈成两截的那一格，必须是白格。</li>
+              </ol>
+              <div class="win-actions">
+                <button id="btn-help-close" class="primary" type="button">回到盘面</button>
+              </div>
+            </div>
+          </div>
           <div id="win-veil" hidden>
             <div class="win-card">
               <h3>每个数字都数对了</h3>
@@ -112,6 +137,9 @@
         <div class="acts">
           <button id="btn-hint" class="primary" type="button">提示<span class="mono" id="hint-count">0</span></button>
           <button id="btn-undo" class="ghost" type="button">撤销</button>
+          <button id="btn-pause" class="ghost" type="button" aria-pressed="false">暂停</button>
+          <button id="btn-restart" class="ghost" type="button">重新开始</button>
+          <button id="btn-fullscreen" class="ghost" type="button" aria-pressed="false">全屏</button>
           <button id="btn-new" class="ghost" type="button">换一局</button>
           <button id="btn-menu" class="ghost" type="button">回选档</button>
         </div>
@@ -138,7 +166,7 @@
           <span><i class="sw sw-bad"></i>对不上：看见的白多了或不够</span>
           <span><i class="sw sw-good"></i>数对了：这个数已经数准</span>
         </div>
-        <p class="keyhint"><b>拖动</b> 连涂一片 · <b>从已定的格里起笔</b> 就是擦 · <b>E</b> 橡皮笔 · <b>B</b>/<b>W</b> 黑/白 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>M</b> 换笔</p>
+        <p class="keyhint"><b>拖动</b> 连涂一片 · <b>从已定的格里起笔</b> 就是擦 · <b>E</b> 橡皮笔 · <b>B</b>/<b>W</b> 黑/白 · <b>M</b> 换笔 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>P</b>/<b>空格</b> 暂停 · <b>R</b> 重新开始 · <b>S</b> 静音 · <b>F</b> 全屏 · <b>?</b> 规则 · <b>Enter</b> 开局</p>
       </aside>
     </section>
   </main>

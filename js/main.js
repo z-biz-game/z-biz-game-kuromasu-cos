@@ -2,13 +2,14 @@
 // verification harness drives. No rule about the board lives here — every judgement comes from
 // js/engine/kuromasu.js through js/ui/game.js.
 
-import { Palette, Cell, applyThemeVars, setReduceMotion, systemPrefersReducedMotion } from './theme.js';
+import { Palette, Cell, applyThemeVars, setReduceMotion, prefersReducedMotion, systemPrefersReducedMotion } from './theme.js';
 import { Sound } from './audio/synth.js';
 import { Store } from './store.js';
 import { TIERS, tierFor, makePuzzle, generate, randomSolution, pruneClues, mix } from './engine/generate.js';
 import * as Engine from './engine/kuromasu.js';
 import { countSolutions } from './engine/count.js';
 import { BoardView } from './render/board.js';
+import { createAnim, resetAnim, spawnRipple, spawnBurst, advance, busy, snapshot } from './render/anim.js';
 import { Game, name, OPEN, BLACK, WHITE, NO_CLUE } from './ui/game.js';
 
 const VERSION = '1.0.0';
@@ -44,6 +45,11 @@ const el = {
   modeBlack: $('#btn-mode-black'),
   modeWhite: $('#btn-mode-white'),
   erase: $('#btn-erase'),
+  pause: $('#btn-pause'),
+  restart: $('#btn-restart'),
+  fullscreen: $('#btn-fullscreen'),
+  pauseVeil: $('#pause-veil'),
+  helpVeil: $('#help-veil'),
 };
 
 const view = new BoardView(el.canvas);
@@ -54,9 +60,25 @@ let erasing = false;
 let startedAt = 0;
 let baseElapsed = 0;
 let ticker = 0;
+// 暂停与动画是同一件事的两半：暂停要把时钟真的停下，动画要有一条不吃刷新率的虚拟时间轴。
+let paused = false;
+let helpOpen = false;
+let anim = createAnim();
+let raf = 0;
+let lastFrame = 0;
+let kickAt = 0;
+let kicker = 0;
+
+// rAF 的时间戳与 performance.now 同一条时钟，与 Date.now 不是：混用会让首帧的 dt 是
+// 一个几百秒的巨数。取不到 performance 的宿主（老 Electron）才退回 Date.now。
+const frameStamp = () => (typeof performance !== 'undefined' && performance && typeof performance.now === 'function'
+  ? performance.now()
+  : Date.now());
 
 const clock = () => baseElapsed + (startedAt ? Date.now() - startedAt : 0);
 const running = () => !!startedAt;
+// 此刻这一局在程序里到底是哪一段：菜单 / 在解 / 停下 / 解开。探针与断言都只读这一个数。
+const phase = () => (!game ? 'menu' : game.status === 'won' ? 'won' : paused ? 'paused' : 'playing');
 
 function fmtMs(ms) {
   const s = Math.floor(ms / 1000);
@@ -75,8 +97,54 @@ function draw() {
   view.resize(game, w, h);
   view.draw(game, {
     pulse,
+    anim,
     preview: stroke && stroke.items.length ? { cells: stroke.items.map((i) => i.cell), value: stroke.value } : null,
   });
+}
+
+// 每帧只消费一个 dt：把它累到 anim.clock 上，其余一切（半径/位移/透明度）都是 clock 的闭函数，
+// 所以 30/60/120Hz 在同一虚拟时刻画出来的必须是一模一样的像素。dt 上限 50ms：从后台标签页回来
+// 那一整个空闲期的 dt 会把所有粒子瞬移到生命之外。
+function pumpFrames(now) {
+  raf = 0;
+  // 首帧不吃 0 也不吃"上一个手势的间隔"：从 kick 的那一刻算起。否则动画的起点被量化到帧边界，
+  // 30Hz 与 120Hz 的同一笔会差整整一个帧长（实测 33ms vs 8ms）——那是真依赖，不是尺子的毛病。
+  const from = lastFrame || kickAt;
+  const dt = Math.max(0, Math.min(0.05, (now - from) / 1000));
+  lastFrame = now;
+  advance(anim, dt);
+  draw();
+  if (busy(anim)) raf = requestAnimationFrame(pumpFrames);
+  else lastFrame = 0;
+}
+
+function kick() {
+  if (anim.reduced) return;
+  if (!raf) {
+    lastFrame = 0;
+    kickAt = frameStamp();
+    raf = requestAnimationFrame(pumpFrames);
+  }
+  // 后台标签页允许整片不发帧。1400ms 比最长寿的粒子还长，所以这条只在"一帧都没来"时才生效——
+  // 真在动的动画此时早就自己空了，busy(anim) 为假，这一句没有副作用。
+  clearTimeout(kicker);
+  kicker = setTimeout(() => {
+    if (!busy(anim)) return;
+    resetAnim(anim);
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    lastFrame = 0;
+    draw();
+  }, 1400);
+}
+
+// 涟漪只跟真实手势与胜利：验证台是走 kuromasu.stroke() 提交笔的，那条路上不留任何瞬态，
+// 于是 tools/scenarios.js 里"连画两遍像素必须相同"的断言不会被动画打掉。
+function fxAt(cell, { burst = false, color = null } = {}) {
+  if (anim.reduced || cell == null) return;
+  if (burst) spawnBurst(anim, cell, { count: 16, seed: (game ? game.moves : 0) + 1, speed: 210 });
+  spawnRipple(anim, cell, { color, sprite: burst });
+  kick();
 }
 
 // One place writes the readouts, so a stat can never be updated by half the file. Every number on
@@ -134,6 +202,90 @@ function stopClock() {
   startedAt = 0;
   clearInterval(ticker);
   ticker = 0;
+}
+
+function syncPause() {
+  el.pause.setAttribute('aria-pressed', String(paused));
+  el.pause.textContent = paused ? '继续' : '暂停';
+  el.pauseVeil.hidden = !paused;
+  el.canvas.dataset.paused = paused ? 'yes' : 'no';
+}
+
+// 暂停是真的停下：走的是同一套 baseElapsed 累加，所以读数不再前走；笔、提示、撤销、重开一律拒绝。
+// 盖一层半透明黑而时钟照走的"暂停"不算暂停。
+function setPaused(on) {
+  if (!game || game.status === 'won') return paused;
+  const next = !!on;
+  if (next === paused) return paused;
+  paused = next;
+  if (paused) stopClock();
+  else startClock();
+  syncPause();
+  syncStats();
+  flushResume();
+  el.hintRule.textContent = paused ? '已暂停' : '提示理由';
+  el.hintLine.textContent = paused
+    ? '计时真的停了，笔也按不下去。按 继续 或 P 接着推这一局。'
+    : '按 提示 会说出当前能推的一格，以及它依据哪条规则。';
+  return paused;
+}
+
+function togglePause() { return setPaused(!paused); }
+
+// 重开 = 同一个种子、同一个盘面，墨与代价全清；换一局 = 重新发牌。两件事分给两个键。
+function restart() {
+  if (!game) return null;
+  game = new Game(game.puzzle);
+  paused = false;
+  helpOpen = false;
+  pulse = null;
+  stroke = null;
+  baseElapsed = 0;
+  resetAnim(anim);
+  el.winVeil.hidden = true;
+  el.helpVeil.hidden = true;
+  setMode(BLACK);
+  syncPause();
+  startClock();
+  syncAll();
+  flushResume();
+  el.hintRule.textContent = '提示理由';
+  el.hintLine.textContent = '同一张牌重新开始：墨擦干净了，步数与提示也归零，盘面一个数字都没变。';
+  return game;
+}
+
+const fullscreenOn = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+function syncFullscreen() {
+  const on = fullscreenOn();
+  el.fullscreen.setAttribute('aria-pressed', String(on));
+  el.fullscreen.textContent = on ? '退出全屏' : '全屏';
+  return on;
+}
+
+function toggleFullscreen() {
+  const root = document.documentElement;
+  try {
+    if (fullscreenOn()) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) Promise.resolve(exit.call(document)).catch(() => {});
+    } else {
+      const req = root.requestFullscreen || root.webkitRequestFullscreen;
+      if (!req) return false;
+      Promise.resolve(req.call(root, { navigationUI: 'hide' })).catch(() => {});
+    }
+  } catch {
+    /* 非手势调用会被策略挡下：挡下就还是不全屏，盘面不许因此断掉 */
+  }
+  return true;
+}
+
+function syncHelp() { el.helpVeil.hidden = !helpOpen; }
+
+function toggleHelp(on) {
+  helpOpen = on === undefined ? !helpOpen : !!on;
+  syncHelp();
+  return helpOpen;
 }
 
 // Two ink brushes and one eraser. The brush is a property of the *pointer*, the mode is a property
@@ -207,6 +359,8 @@ function onWin() {
   el.winMeta.textContent = `${tierFor(game.puzzle.tier).name} · ${game.w}×${game.h} · ${fmtMs(ms)} · ${game.moves} 步 · 提示 ${game.hints} 次`;
   el.winRecord.textContent = better ? '新纪录：这一局比存档里的更不求人。' : '未破纪录：同档先比提示次数。';
   el.winVeil.hidden = false;
+  setPaused(false);
+  fxAt((((game.h / 2) | 0) * game.w + ((game.w / 2) | 0)), { burst: true });
   Sound.win();
   renderRecords();
 }
@@ -240,7 +394,7 @@ function refusalLine({ quiet = false } = {}) {
 }
 
 function useHint() {
-  if (!game || game.status === 'won') return null;
+  if (!game || game.status === 'won' || paused) return null;
   const before = game.hints;
   const info = game.hint();
   if (!info) return null;
@@ -255,7 +409,7 @@ function useHint() {
 }
 
 function undo() {
-  if (!game) return null;
+  if (!game || paused) return null;
   const step = game.undo();
   if (!step) return null;
   pulse = null;
@@ -272,7 +426,11 @@ function begin({ tier = 'trainee', seed = null, resume = null } = {}) {
   game = new Game(puzzle);
   pulse = null;
   stroke = null;
+  paused = false;
+  helpOpen = false;
+  resetAnim(anim);
   el.winVeil.hidden = true;
+  el.helpVeil.hidden = true;
   baseElapsed = 0;
   if (resume) {
     game.moves = resume.moves || 0;
@@ -284,6 +442,8 @@ function begin({ tier = 'trainee', seed = null, resume = null } = {}) {
   setMode(BLACK);
   show('game');
   startClock();
+  syncPause();
+  syncFullscreen();
   el.hintRule.textContent = '提示理由';
   el.hintLine.textContent = '按 提示 会说出当前能推的一格，以及它依据哪条规则。';
   syncAll();
@@ -371,6 +531,16 @@ function applySettings() {
   $('#btn-sound').textContent = Store.setting('sound') ? '音效 开' : '音效 关';
   $('#btn-motion').setAttribute('aria-pressed', String(!!Store.setting('reduceMotion')));
   $('#btn-motion').textContent = reduce ? '动效 省' : '动效 全';
+  // 减动效对动画层是一刀切：旗标落下、排队的帧全撤、场上任何涟漪与粒子当场清空——
+  // 不是"照样建出来再乘个 0"，那样每帧还在算，屏幕上也确实还在动。
+  anim.reduced = prefersReducedMotion();
+  if (anim.reduced) {
+    clearTimeout(kicker);
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    lastFrame = 0;
+    resetAnim(anim);
+  }
 }
 
 // ---- pointer gestures: down decides the value for the whole stroke, up commits one step ------
@@ -392,6 +562,11 @@ function unpreview() {
 
 function strokeStart(ev) {
   if (!game || game.status === 'won') return;
+  if (paused) {
+    el.hintRule.textContent = '这一局停着';
+    el.hintLine.textContent = '按 继续 或 P 才能落笔：暂停期间涂上去的东西不会进盘面，也不会进步数。';
+    return;
+  }
   const t = view.hitCell(ev.clientX, ev.clientY);
   if (t < 0) return;
   ev.preventDefault();
@@ -442,6 +617,7 @@ function strokeEnd() {
   }
   if (step.skipped) refusalLine({ quiet: true });
   afterStep(s.value === OPEN ? 'rub' : 'place');
+  if (!paused && game && game.status !== 'won') fxAt(cells[cells.length - 1], { color: s.value === OPEN ? Palette.hint : null });
   return step;
 }
 
@@ -456,7 +632,13 @@ el.canvas.addEventListener('pointercancel', () => {
 });
 el.canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
 
-el.modeBlack.addEventListener('click', () => setMode(BLACK));
+el.pause.addEventListener('click', togglePause);
+el.restart.addEventListener('click', restart);
+el.fullscreen.addEventListener('click', toggleFullscreen);
+$('#btn-resume-play').addEventListener('click', () => setPaused(false));
+$('#btn-help').addEventListener('click', () => toggleHelp(true));
+$('#btn-help-close').addEventListener('click', () => toggleHelp(false));
+$('#btn-mode-black').addEventListener('click', () => setMode(BLACK));
 el.modeWhite.addEventListener('click', () => setMode(WHITE));
 el.erase.addEventListener('click', () => setErase(!erasing));
 $('#btn-hint').addEventListener('click', useHint);
@@ -498,9 +680,29 @@ window.addEventListener('keydown', (ev) => {
   else if (k === 'w') setMode(WHITE);
   else if (k === 'e') setErase(!erasing);
   else if (k === 'm' && game) setMode(game.mode === BLACK ? WHITE : BLACK);
+  else if (k === 'p' && !el.viewMenu.hidden) { ev.preventDefault(); togglePause(); }
+  else if (k === ' ') {
+    ev.preventDefault();
+    if (!el.viewMenu.hidden) begin({ tier: 'trainee' });
+    else if (helpOpen) toggleHelp(false);
+    else togglePause();
+  } else if (k === 'enter') {
+    if (!el.viewMenu.hidden) { ev.preventDefault(); begin({ tier: 'trainee' }); }
+  } else if (k === 'r') { if (game && el.viewMenu.hidden) restart(); }
+  else if (k === 'f') toggleFullscreen();
+  else if (k === 's') {
+    Store.setSetting('sound', !Store.setting('sound'));
+    applySettings();
+    Sound.place();
+  } else if ((k === '?' || k === '/') && !el.viewMenu.hidden) toggleHelp();
+  else if (k === 'escape' && helpOpen) toggleHelp(false);
 });
 
 window.addEventListener('resize', draw);
+// 进出全屏都要重算一次可用盒子：cell 尺寸由容器来，尺寸变了而几何不重来，点击就会错格。
+for (const fsEv of ['fullscreenchange', 'webkitfullscreenchange']) {
+  window.addEventListener(fsEv, () => { syncFullscreen(); draw(); });
+}
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flushResume();
 });
@@ -549,7 +751,7 @@ window.kuromasu = {
   // The harness commits through the same path a pointer release does, so a scenario that passes
   // here has driven the real state machine rather than a copy of it.
   stroke(cells, value) {
-    if (!game) return null;
+    if (!game || paused) return null;
     const v = value === undefined ? (erasing ? OPEN : game.mode) : value;
     const step = game.stroke(cells, v);
     if (step) afterStep(step.value === OPEN ? 'rub' : 'place');
@@ -557,7 +759,7 @@ window.kuromasu = {
     return step;
   },
   tap(t, mode) {
-    if (!game) return null;
+    if (!game || paused) return null;
     const step = mode === undefined ? game.tap(t, erasing ? OPEN : game.mode) : game.tap(t, mode);
     if (step) afterStep(step.writes[0].to === OPEN ? 'rub' : 'place');
     else refusalLine();
@@ -571,7 +773,16 @@ window.kuromasu = {
     return r;
   },
   elapsed: clock,
-  state: () => (game ? { ...game.state(), elapsedMs: clock(), erasing } : null),
+  pause: togglePause,
+  paused: () => paused,
+  phase,
+  restart,
+  fullscreen: toggleFullscreen,
+  isFullscreen: fullscreenOn,
+  help: toggleHelp,
+  anim: () => snapshot(anim),
+  fx: (cell, opts) => fxAt(cell, opts),
+  state: () => (game ? { ...game.state(), elapsedMs: clock(), erasing, paused, phase: phase(), animBusy: busy(anim) } : null),
   cellAt: (x, y) => (game ? game.cellAt(x, y) : -1),
   valueOf: (t) => (game ? game.valueOf(t) : OPEN),
   markName: name,

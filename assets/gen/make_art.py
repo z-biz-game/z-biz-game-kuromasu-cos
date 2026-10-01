@@ -35,7 +35,7 @@ import struct
 import sys
 
 try:
-    from PIL import Image, ImageDraw, ImageFilter, ImageFont
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageStat
 except ImportError:  # pragma: no cover
     sys.stderr.write('需要 Pillow（与量具 make_icons.py 同一条依赖）：pip3 install Pillow\n')
     raise SystemExit(3)
@@ -519,8 +519,21 @@ def og_cover(w=1200, h=630, seed=21):
 
 # ---------------------------------------------------------------- 纹理 / sprite / 字形
 
-def paper_grain_texture(size=512, seed=31):
-    return paper_surface(size, seed).convert('RGB')
+def runtime_paper(size=256, seed=31, bound=6):
+    """上屏那一张纸纹：母纹理去均值并限幅到 ±bound，均值正好落在 #F3EFE6 上。
+
+    为什么不直接拿 paper_surface 的产物上屏：tools/scenarios.js 里"纸就是底色"与"没定的格就是
+    纸"两条断言是逐通道 tol=12 比 #F3EFE6，而满幅纸纹的均值比纸色低 4.5、尾巴能到 13——纹理一
+    上屏那两条就红。去均值 + 限幅之后只剩 ±6：看得见纸的牙，又不动任何一条颜色判据。
+    """
+    src = paper_surface(size, seed).convert('RGB')
+    stat = ImageStat.Stat(src)
+    chans = []
+    for i, base in enumerate(PAPER[:3]):
+        mean = stat.mean[i]
+        band = [max(0, min(255, int(base + max(-bound, min(bound, (v - mean) * 1.35))))) for v in range(256)]
+        chans.append(src.split()[i].point(band))
+    return Image.merge('RGB', chans)
 
 
 def ink_grain_texture(size, seed=41):
@@ -532,7 +545,10 @@ def ink_grain_texture(size, seed=41):
     op, np = out.load(), src.load()
     for y in range(n):
         for x in range(n):
-            op[x, y] = (0x52, 0x52, 0x60, max(0, min(70, int((np[x, y] - 112) * 0.55))))
+            # alpha 上限 18 是**判据**：board.js 把这张图叠在黑格上，而 tools/scenarios.js 用
+            # near(中心像素, --shade, 20) 逐通道比颜色。叠亮斑就是把中心像素往上抬，抬过 20
+            # 那条浏览器断言就红——所以这里必须封顶，不是"好看就行"。
+            op[x, y] = (0x52, 0x52, 0x60, max(0, min(18, int((np[x, y] - 118) * 0.42))))
     return out
 
 
@@ -656,7 +672,7 @@ def build():
     emit('icons/favicon-16.png', compact_icon(16), 'favicon')
     emit('assets/og-cover.png', og_cover(), '社交卡')
     # 256 见方：盘面格子只有 26–62px，纹理是平铺用的，做 512 只是把首屏多压 250KB 的白噪声
-    emit('assets/textures/paper-grain.png', paper_grain_texture(256), '可平铺纸纹（盘面上屏）')
+    emit('assets/textures/paper-grain.png', runtime_paper(256), '可平铺纸纹（盘面上屏，去均值限幅 ±6）')
     emit('assets/textures/ink-grain.png', ink_grain_texture(256), '可平铺墨纹 RGBA（黑格上屏）')
     emit('assets/sprites/amber-burst.png', amber_burst(256), '光爆 sprite RGBA')
     for g in GLYPHS:
