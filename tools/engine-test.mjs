@@ -34,6 +34,9 @@ import {
 } from '../js/engine/kuromasu.js';
 import { countSolutions, UNIQUE, MANY, NONE, OVERBUDGET } from '../js/engine/count.js';
 import { generate, makePuzzle, randomSolution, pruneClues, tierFor, TIERS, mix } from '../js/engine/generate.js';
+// 存档层同样不需要 DOM：它只在 try 里读 localStorage，Node 里加载得到，所以两段式解码的
+// 行为面（坏一条只丢那一条）能在这里断言，而不是只能靠浏览器点一遍。
+import { Store } from '../js/store.js';
 
 let pass = 0;
 let fail = 0;
@@ -563,6 +566,66 @@ eq('一个数字都没有的盘没有解', throws(() => createBoard({ w: 2, h: 2
   ok('数字给满时更简单', tiny.ok && tiny.score > 0, tiny.score);
   const dense = generate({ w: 7, h: 7, seed: 'band|dense', tries: 6, keepRatio: 0.8 });
   ok('留得多就推得快', dense.ok && dense.score < TIERS[2].band[0], `${dense.score} vs ${TIERS[2].band[0]}`);
+}
+
+// ---- 存档的两段式解码：坏一条只丢那一条 ----
+{
+  const raw = (o) => JSON.stringify(o);
+  const RESUME = { seed: 's|1', tier: 'trainee', cells: 6, ink: [0, 4, 1, 1, 2, 1], elapsedMs: 900, moves: 3, hints: 1, at: 0 };
+  const BEST = { trainee: { ms: 1000, hints: 0, moves: 10, size: '6×6', at: 0 } };
+  const BASE = { v: 1, settings: { sound: false, reduceMotion: true }, best: BEST, resume: RESUME, totals: { solved: 2, hints: 1, ms: 2000 } };
+
+  eq('空串退回默认设置', Store.decodeSave('').settings.sound, true);
+  eq('非字符串退回默认累计', Store.decodeSave(undefined).totals.solved, 0);
+  eq('截断的 JSON 退回默认', Store.decodeSave(raw(BASE).slice(0, 30)).settings.sound, true);
+  eq('顶层是数组就不是存档', Object.keys(Store.decodeSave('[1,2,3]').best).length, 0);
+  eq('数字顶层也不是存档', Store.decodeSave('7').totals.solved, 0);
+
+  const good = Store.decodeSave(raw(BASE));
+  eq('好存档的设置读得回来', good.settings.sound, false);
+  eq('省动效读得回来', good.settings.reduceMotion, true);
+  eq('纪录读得回来', Object.keys(good.best).join(','), 'trainee');
+  Store.data = good;
+  const back = Store.resume();
+  eq('游程墨解回六格', Array.from(back.board).join(','), '0,0,0,0,1,2');
+  eq('牌局用时读得回来', back.elapsedMs, 900);
+  ok('解码结果里不掺派生的格子数组', !('board' in good.resume), Object.keys(good.resume).join(','));
+  ok('存档还是比一格一数省', JSON.stringify(good.resume).length < 400, JSON.stringify(good.resume).length);
+
+  const pollutedBest = { ...BEST, nullish: null, nan: { ms: 1e308 * 10, hints: 0, moves: 1 }, str: { ms: '1000', hints: 0, moves: 1 }, shallow: {} };
+  const pd = Store.decodeSave(raw({ ...BASE, best: pollutedBest }));
+  eq('坏纪录只丢那一条', Object.keys(pd.best).join(','), 'trainee');
+  eq('别的纪录不受牵连', pd.settings.reduceMotion, true);
+  eq('累计不受牵连', pd.totals.solved, 2);
+
+  const brokenResumes = [
+    ['游程个数越界', { ...RESUME, ink: [0, 9] }],
+    ['墨值不是黑白', { ...RESUME, ink: [5, 1] }],
+    ['游程对不完整', { ...RESUME, ink: [0, 4, 1] }],
+    ['格数缺失', { ...RESUME, cells: undefined }],
+    ['格数离谱', { ...RESUME, cells: 99999 }],
+    ['种子不是字符串', { ...RESUME, seed: 42 }],
+    ['档位缺失', { ...RESUME, tier: undefined }],
+    ['ink 不是数组', { ...RESUME, ink: '0,4' }],
+  ];
+  for (const [name, r] of brokenResumes) {
+    const d = Store.decodeSave(raw({ ...BASE, resume: r }));
+    ok(`${name}：只丢这局牌`, d.resume === null && Object.keys(d.best).length === 1 && d.totals.solved === 2, JSON.stringify(d.resume));
+  }
+
+  // reset 必须真的把键删掉：只 setItem 一份空壳等于把"清空存档"变成"改天再读一次垃圾"。
+  const mem = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+    setItem: (k, v) => mem.set(k, String(v)),
+    removeItem: (k) => mem.delete(k),
+  };
+  Store.data = good;
+  Store.save();
+  eq('save 写得进存储', typeof mem.get(Store.KEY), 'string');
+  Store.reset();
+  eq('reset 删的是键', mem.has(Store.KEY), false);
+  eq('reset 之后内存是干净的', Store.setting('sound'), true);
 }
 
 console.log(`\n${pass} 通过 / ${fail} 失败`);

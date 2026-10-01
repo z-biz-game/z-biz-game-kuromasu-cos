@@ -7,8 +7,12 @@
 // same seed always redraws the same board no matter when the save was written.
 
 const KEY = 'kuromasu.save.v1';
+// 存档结构变了就 bump 这个数：旧版本的记录会被当成"不认识的那一条"单独丢掉，
+// 而不是让新代码去猜一份形状已经变过的 JSON。
+const SCHEMA = 1;
 
 const defaults = () => ({
+  v: SCHEMA,
   settings: { sound: true, reduceMotion: false },
   best: {},
   resume: null,
@@ -35,36 +39,109 @@ function rleEncode(board) {
   return out;
 }
 
-function rleDecode(pairs, len) {
+// ---- 两段式解码 ----
+// 第一段只管"这串字节是不是一个对象"，第二段才逐条核对形状。分开写是因为它们坏的原因不同：
+// 第一段坏 = 存储被截断/被人塞了垃圾（整份退回默认是唯一诚实的答案），
+// 第二段坏 = 某一条记录自己不成形（那就只丢那一条）。旧写法把两段揉在一个 try 里，
+// 于是一条写坏的 resume 会让玩家的最佳纪录与设置一起回到出厂——那是数据丢失，不是容错。
+
+function count(v) {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
+}
+
+function parseRecord(raw) {
+  if (typeof raw !== 'string' || !raw) return null;
+  try {
+    const v = JSON.parse(raw);
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+// 游程对必须是 [0..2 的值, 1..255 的个数]，而且总长不能超出格数：超出说明这一份 ink
+// 根本不属于这块盘。退回 null 而不是"截断到 len"——静悄悄少几格的墨比没有存档更危险。
+function decodeInk(pairs, len) {
   const b = new Uint8Array(len);
   let i = 0;
   for (let p = 0; p < pairs.length; p += 2) {
     const v = pairs[p];
     const n = pairs[p + 1];
-    for (let k = 0; k < n && i < len; k++) b[i++] = v;
+    if (!Number.isInteger(v) || v < 0 || v > 2) return null;
+    if (!Number.isInteger(n) || n < 1 || n > 255) return null;
+    if (i + n > len) return null;
+    for (let k = 0; k < n; k++) b[i++] = v;
   }
   return b;
 }
 
+function cleanBest(input) {
+  const out = {};
+  if (!input || typeof input !== 'object') return out;
+  for (const tier of Object.keys(input)) {
+    const r = input[tier];
+    if (!r || typeof r !== 'object') continue;
+    const ms = count(r.ms);
+    const hints = count(r.hints);
+    const moves = count(r.moves);
+    if (ms === null || hints === null || moves === null) continue;
+    out[tier] = { ms, hints, moves, size: typeof r.size === 'string' ? r.size : '', at: count(r.at) || 0 };
+  }
+  return out;
+}
+
+function cleanResume(r) {
+  if (!r || typeof r !== 'object') return null;
+  const cells = count(r.cells);
+  if (cells === null || cells < 1 || cells > 4096) return null;
+  if (typeof r.seed !== 'string' || !r.seed) return null;
+  if (typeof r.tier !== 'string' || !r.tier) return null;
+  if (!Array.isArray(r.ink)) return null;
+  if (!decodeInk(r.ink, cells)) return null;
+  // 只留"存进去的那几个字段"：墨的格子数组是读的时候现算的（见 resume()），
+  // 把它一起存等于把 100 个键名写进 JSON，游程编码省下来的那点字节当场还回去。
+  return {
+    ...r,
+    cells,
+    elapsedMs: count(r.elapsedMs) || 0,
+    moves: count(r.moves) || 0,
+    hints: count(r.hints) || 0,
+  };
+}
+
+function decodeSave(raw) {
+  const base = defaults();
+  const parsed = parseRecord(raw);
+  if (!parsed) return base;
+  const settings = parsed.settings && typeof parsed.settings === 'object' ? parsed.settings : {};
+  return {
+    v: SCHEMA,
+    // 设置是唯一可以整份信任的段：它只有两个布尔，坏值直接退回默认。
+    settings: {
+      sound: settings.sound !== false,
+      reduceMotion: settings.reduceMotion === true,
+    },
+    best: cleanBest(parsed.best),
+    resume: cleanResume(parsed.resume),
+    totals: { ...base.totals, ...(parsed.totals && typeof parsed.totals === 'object' ? parsed.totals : {}) },
+  };
+}
+
 function load() {
+  let saved = null;
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return defaults();
-    const parsed = JSON.parse(raw);
-    const base = defaults();
-    return {
-      ...base,
-      ...parsed,
-      settings: { ...base.settings, ...(parsed.settings || {}) },
-      totals: { ...base.totals, ...(parsed.totals || {}) },
-    };
+    saved = localStorage.getItem(KEY);
   } catch {
+    // 隐私模式里 localStorage 本身就会抛：那是环境不给存，不是存档坏了。
     return defaults();
   }
+  return decodeSave(saved);
 }
 
 export const Store = {
   KEY,
+  SCHEMA,
+  decodeSave,
   data: load(),
 
   save() {
@@ -126,10 +203,13 @@ export const Store = {
     this.save();
   },
 
+  // 读回来时已经校验过了（decodeSave），所以这里不再"猜一次形状"：坏的那条在解码阶段就是 null，
+  // 玩家看到的只是"没有可继续的牌局"，其余存档一个字都没动。
   resume() {
     const r = this.data.resume;
     if (!r) return null;
-    return { ...r, board: rleDecode(r.ink, r.cells) };
+    const board = decodeInk(r.ink, r.cells);
+    return board ? { ...r, board } : null;
   },
 
   clearResume() {
@@ -139,6 +219,10 @@ export const Store = {
 
   reset() {
     this.data = defaults();
-    this.save();
+    try {
+      localStorage.removeItem(KEY);
+    } catch {
+      /* 不给删就算了，内存里已经是干净的 */
+    }
   },
 };
