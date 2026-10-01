@@ -674,6 +674,9 @@ $('#btn-reset').addEventListener('click', () => {
 window.addEventListener('keydown', (ev) => {
   if (ev.target && /input|textarea/i.test(ev.target.tagName)) return;
   const k = ev.key.toLowerCase();
+  // 焦点在按钮上时 Enter/空格是浏览器自己的"按下这个按钮"：抢过来 preventDefault 会让
+  // 键盘玩家无论 Tab 到哪个档位都开局练习档——那是无障碍缺陷，不是快捷键设计。
+  const onButton = !!(ev.target && ev.target.tagName === 'BUTTON');
   if (k === 'h') useHint();
   else if (k === 'z') undo();
   else if (k === 'b') setMode(BLACK);
@@ -681,12 +684,12 @@ window.addEventListener('keydown', (ev) => {
   else if (k === 'e') setErase(!erasing);
   else if (k === 'm' && game) setMode(game.mode === BLACK ? WHITE : BLACK);
   else if (k === 'p' && !el.viewMenu.hidden) { ev.preventDefault(); togglePause(); }
-  else if (k === ' ') {
+  else if (k === ' ' && !onButton) {
     ev.preventDefault();
     if (!el.viewMenu.hidden) begin({ tier: 'trainee' });
     else if (helpOpen) toggleHelp(false);
     else togglePause();
-  } else if (k === 'enter') {
+  } else if (k === 'enter' && !onButton) {
     if (!el.viewMenu.hidden) { ev.preventDefault(); begin({ tier: 'trainee' }); }
   } else if (k === 'r') { if (game && el.viewMenu.hidden) restart(); }
   else if (k === 'f') toggleFullscreen();
