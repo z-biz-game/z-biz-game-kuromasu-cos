@@ -41,6 +41,12 @@ jobs:
       - name: Docs equal the current values in code
         run: node tools/doctest.mjs
 
+      # 破坏台账：一把从没红过的闸和一把没接线的闸输出是一模一样的。这里把每一类谎各写回临时副本
+      # 一遍（真文件不动），要求 doctest 必须**点名**红；任何一把刀没红就整体红在这里。
+      # 本地入口是同一个脚本（npm run sabotage），tools/verify.sh 的 logic 档也跑它——没有只给 CI 的门。
+      - name: Sabotage ledger proves the docs gate can go red
+        run: node tools/sabotage.mjs
+
       - name: Difficulty ladder is still measured
         run: node tools/balance.mjs
         env:

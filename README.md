@@ -21,7 +21,7 @@
   「不管剩下的格怎么放，都不可能让所有数字对上」。这条判据只在真矛盾时开口（见 DESIGN §7）。
 - 难度不是标签：`初学 → 大师` 五档的分数带是**实测**出来的（`npm run balance` 打印分位表），
   档位排的是「盘面多大」×「留下多少数字」，`band` 是**选取目标**，`balance` 盯着不许漂移。
-- 规模：9 个 ES Module / 2,415 行 JS + 6 个验证脚本 / 2,876 行 + 555 行 CSS/HTML，**运行时依赖 0 个**。
+- 规模：9 个 ES Module / 2,415 行 JS + 7 个验证脚本 / 3,094 行 + 555 行 CSS/HTML，**运行时依赖 0 个**。
 - 验证：**214 项 Node 断言** + **410 项浏览器断言**（10 个场景，读 DOM 几何与画布像素，不读标志位）。
 - **在线试玩**：<https://z-biz-game.github.io/z-biz-game-kuromasu-cos/>（`main` 分支推送即自动部署）
 
@@ -40,6 +40,7 @@ npm run check        # 逐文件 node --check 语法门禁
 npm test             # 引擎断言 214 项：规则可靠性 / 生成保证 / 状态机 / 存档形状
 npm run balance      # 难度实测台：每档分数分位、命中率、求解代价、档位阶梯门禁
 npm run doctest      # 文档等式：README / DESIGN 印出的每个现值都对代码重算一遍（只比现值，不复测耗时）
+npm run sabotage     # 破坏台账：四把刀各写一类谎进临时副本，文档闸必须点名变红（见下）
 npm run verify       # 无头 Chrome 跑 10 个浏览器场景（需本机 Chrome，见下）
 ```
 
@@ -60,6 +61,9 @@ npm run verify       # 无头 Chrome 跑 10 个浏览器场景（需本机 Chrom
 === ALL GREEN ===
 ```
 
+那 10 个场景的**逐行**条数钉在 `tools/verify.sh` 的 EXPECTS 表里（上面那段输出抄的就是这张表，改一条断言就得同时改两
+case）：一个场景少一条、另一个多一条而总和不动，光看总和是分辨不出来的。
+
 `gen` 那两列负数对照组是**故意**的：门控之后再多删一个数字必须造出多解盘（12 盘里 8 盘不再是唯一解），
 而铅笔路径**一次都没有**被这些多解盘骗到（`fooled: 0`）。一组永远为空的对照组等于没测。
 
@@ -68,6 +72,29 @@ npm run verify       # 无头 Chrome 跑 10 个浏览器场景（需本机 Chrom
 ```bash
 BASE_URL=https://z-biz-game.github.io/z-biz-game-kuromasu-cos/ npm run verify
 ```
+
+---
+
+## 破坏试验台账（这把闸会不会红）
+
+`npm run doctest` 报全绿只说明「这一轮文档没漂」，它没说**这把闸会不会红**——一把从没红过的闸和一把
+没接线的闸，输出是一模一样的。所以台账进树：`npm run sabotage` 内置四把刀，每把在**工作区根的临时副本**
+里做一个最小扰动，跑文档闸，断言必须看到**预期的那一条 FAIL 行**（连明细一起对）；任何一把没红或没点名
+就整体判红并报出自己的 id。CI 的 check job 与 `tools/verify.sh` 的 logic 档跑的是同一个脚本，本地没有
+「只有 CI 才有的门」，CI 也没有只在那边才关得上的门。刀不碰仓里的真文件，所以不需要 `git checkout`
+去擦自己留下的痕迹（共享工作里那会把别人正在写的东西抹掉）；副本跑完即删，日志留在工作区根的
+`_tmp-kuromasu-sab-*.log`。
+
+| 刀 | 打在哪一侧 | 这一把做的最小扰动 | 必须点名的 FAIL |
+|---|---|---|---|
+| S1 | 文档 | README 档位表 大师 那一行把 `28%` 印成 `30%` | `D1c 大师 留 28%` · `文档 30% vs 代码 28%` |
+| S2 | 文档 | README 规则表 白不断路 那一行把 `2.5` 印成 `3`（DESIGN 不动） | `D2c 白不断路 的权重 2.5` · `README 3 /` |
+| S3 | 代码 | `Rules.island` 的权重 `2.5` 改成 `3`（两张表都留在 2.5） | `D2c 白不断路 的权重 3` · `README 2.5` |
+| S4 | 代码 | generate 的默认抽盘次数 `24` 改成 `25`（DESIGN 没跟） | `D6g` 的 tries · `文档 24 vs 代码 25` |
+
+S2 与 S3 是同一条断言的两侧：只盯标签里的数分不出漂移在哪一边，所以两把刀各配一条明细——文档那侧的
+明细是 `README 3`，代码那侧是 `README 2.5`（跟着动的换成代码）。台账另带两个反空转：**不带刀的副本**
+必须先全绿（否则「红是复制这件事造出来的」排不掉，四把刀的红就都不作数）；跑完再验一次工作树仍然干净。
 
 ---
 
@@ -151,7 +178,7 @@ js/engine/generate.js   种解 → 按"唯一且推得完"删数字 → 按难�
 js/ui/game.js       状态机：手势、撤销、提示、判胜
 js/render/board.js  几何 + 绘制 + 命中（同一套常数，点击不会差一格）
 js/store.js         localStorage 单键存档：种子 + 游程编码的墨水 + 这一局的花费
-tools/              engine-test / balance / playtest(CDP) / doctest / scenarios / verify.sh
+tools/              engine-test / balance / playtest(CDP) / doctest / sabotage / scenarios / verify.sh
 ```
 
 ## 许可
