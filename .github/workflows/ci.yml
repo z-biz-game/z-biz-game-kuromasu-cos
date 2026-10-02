@@ -36,6 +36,11 @@ jobs:
 
       # The ladder is a promise, not a caption: `TIERS[].band` is a selection target, and this
       # step goes red if a tier stops landing in its own band or the medians stop ordering.
+      # 文档也是被断言的面：README / DESIGN 印出去的档位表、规则条数、端口、SAMPLES、行号引用，
+      # 每一条都要等于代码的现在值。它不碰浏览器，在 check job 里就能红。
+      - name: Docs equal the current values in code
+        run: node tools/doctest.mjs
+
       - name: Difficulty ladder is still measured
         run: node tools/balance.mjs
         env:

@@ -10,6 +10,17 @@
 # on its own.
 set -u
 HERE=$(cd "$(dirname "$0")/.." && pwd)
+# 文档门禁排在浏览器之前：README / DESIGN 印出去的每一个现值都要等于代码的现在值，这一条不需要
+# Chrome、也不需要服务，只需读文件（外加跑一次 engine-test 拿它的条数）。文档漂了就没必要再花
+# 几十秒开设备跑十个场景。它对 verify.sh 的断言是读这个脚本的**源码**得来的（场景清单、端口），
+# 不是读它的输出，所以谁先谁后都一样——排在前面只是为了早点红。
+node "$HERE/tools/doctest.mjs" >/tmp/kuromasu-doctest.log 2>&1 || {
+  echo "doctest FAILED：文档与代码漂了（详见 /tmp/kuromasu-doctest.log）" >&2
+  grep '^  FAIL' /tmp/kuromasu-doctest.log | head -20 >&2
+  tail -2 /tmp/kuromasu-doctest.log >&2
+  exit 5
+}
+echo "doctest: $(grep '^rows:' /tmp/kuromasu-doctest.log)"
 PORT=${CDP_PORT:-9363}
 # 5173 is Xcode/ashen-ring's default and a long-lived server there will happily serve a
 # *different* app, so this harness deliberately uses its own port. Other agents in this repo

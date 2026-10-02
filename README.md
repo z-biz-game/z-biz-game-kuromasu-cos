@@ -21,7 +21,7 @@
   「不管剩下的格怎么放，都不可能让所有数字对上」。这条判据只在真矛盾时开口（见 DESIGN §7）。
 - 难度不是标签：`初学 → 大师` 五档的分数带是**实测**出来的（`npm run balance` 打印分位表），
   档位排的是「盘面多大」×「留下多少数字」，`band` 是**选取目标**，`balance` 盯着不许漂移。
-- 规模：9 个 ES Module / 2,415 行 JS + 5 个验证脚本 / 2,363 行 + 555 行 CSS/HTML，**运行时依赖 0 个**。
+- 规模：9 个 ES Module / 2,415 行 JS + 6 个验证脚本 / 2,876 行 + 555 行 CSS/HTML，**运行时依赖 0 个**。
 - 验证：**214 项 Node 断言** + **410 项浏览器断言**（10 个场景，读 DOM 几何与画布像素，不读标志位）。
 - **在线试玩**：<https://z-biz-game.github.io/z-biz-game-kuromasu-cos/>（`main` 分支推送即自动部署）
 
@@ -39,11 +39,12 @@ npm run electron     # 桌面壳（electron/main.cjs，同一份代码）
 npm run check        # 逐文件 node --check 语法门禁
 npm test             # 引擎断言 214 项：规则可靠性 / 生成保证 / 状态机 / 存档形状
 npm run balance      # 难度实测台：每档分数分位、命中率、求解代价、档位阶梯门禁
+npm run doctest      # 文档等式：README / DESIGN 印出的每个现值都对代码重算一遍（只比现值，不复测耗时）
 npm run verify       # 无头 Chrome 跑 10 个浏览器场景（需本机 Chrome，见下）
 ```
 
 `npm run verify` 自己起服务、自己开 Chrome、自己收尾，退出码即结论（HTTP 5254 / CDP 9363 是黑目的，
-别的仓各占一对，写死在 `tools/verify.sh:13-18`）：
+别的仓各占一对，写死在 `tools/verify.sh:24-29`；浏览器之前还先跑一道 `npm run doctest`）：
 
 ```
 === engine ===    53 checks, 0 failed  {score: 64.5, clues: 19, steps: 49}
@@ -150,7 +151,7 @@ js/engine/generate.js   种解 → 按"唯一且推得完"删数字 → 按难�
 js/ui/game.js       状态机：手势、撤销、提示、判胜
 js/render/board.js  几何 + 绘制 + 命中（同一套常数，点击不会差一格）
 js/store.js         localStorage 单键存档：种子 + 游程编码的墨水 + 这一局的花费
-tools/              engine-test / balance / playtest(CDP) / scenarios / verify.sh
+tools/              engine-test / balance / playtest(CDP) / doctest / scenarios / verify.sh
 ```
 
 ## 许可
