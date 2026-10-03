@@ -407,7 +407,7 @@ ok(cites.length >= 12, `D10a 文档里的行号引用解析到 ${cites.length} �
 ok(bad.length === 0, 'D10 每一条 path:NN 引用都落在真实文件的行数内', bad.length ? `越界：${bad.join('，')}` : `${cites.length} 条全部在范围内`);
 const anchors = [
   ['js/engine/kuromasu.js', 72, 'createBoard'], ['js/engine/generate.js', 89, 'pruneClues'],
-  ['js/engine/generate.js', 71, 'randomSolution'], ['js/main.js', 208, '提示次数'],
+  ['js/engine/generate.js', 71, 'randomSolution'], ['js/main.js', 209, '提示次数'],
   ['js/main.js', 376, 'function preview'], ['js/ui/game.js', 228, 'nextDeduction'],
   ['js/ui/game.js', 128, 'refusal = null'], ['js/store.js', 92, 'best[tier]'],
   ['js/render/board.js', 139, 'preview.value === OPEN'], ['tools/scenarios.js', 193, 'NO_CLUE'],
@@ -447,10 +447,18 @@ ok(toolsLine.length > 10 && unnamed.length === 0,
   `没点名：${unnamed.join(' ') || '没有'} · 那一行「${toolsLine.trim()}」`);
 
 // ---- D11 键位：README 操作表印的按键 == main.js 真处理的那几个 ----
-const keysDoc = [...new Set([...README.slice(README.indexOf('## 玩法'), README.indexOf('判胜用的是'))
-  .matchAll(/`([A-Z])`/g)].map(m => m[1]))].sort();
-const keysCode = [...new Set((MAIN.match(/k === '(\w)'/g) || []).map(x => x.match(/'(\w)'/)[1].toUpperCase()))].sort();
-ok(keysDoc.length >= 6 && keysCode.length === 6, 'D11a 两边的按键都解析到了（文档 6 个字母键，代码 6 个分支）',
+// 只数表格行：把整节散文都当"文档说了这颗键"的话，删掉操作表那一行还能靠后一句护栏话蒙过去
+// （本轮的阳性对照就是这么打不红的，于是改成只认 `| ... |` 行）。
+// 按键现在分散在四处监听里，写法也不统一：玩法那组是 `const k = ev.key.toLowerCase(); k === 'h'`，
+// 暂停是 `k === 'p'`，全屏/静音是 `ev.key === "f"`（双引号）。早期这里只认 `k === 'x'` 一种形态，
+// 于是 P 落地那天闸是绿的、文档里根本没有这颗键——两种引号形态都认，少认一种就是漏一颗键的文档。
+const keysSpan = README.slice(README.indexOf('## 玩法'), README.indexOf('判胜用的是')).split('\n')
+  .filter((l) => l.startsWith('| ')).join('\n');
+const keysDoc = [...new Set([...keysSpan.matchAll(/`([A-Z])`/g)].map(m => m[1]))].sort();
+const keysCode = [...new Set([...MAIN.matchAll(/(?:k|ev\.key)\s*===\s*['"]([A-Za-z])['"]/g)]
+  .map(m => m[1].toUpperCase()))].sort();
+ok(keysDoc.length >= 9 && keysCode.length >= 9,
+  `D11a 两边的按键都解析到了（操作表 ${keysDoc.length} 个字母键、代码 ${keysCode.length} 个分支，都不许是空解析）`,
   `文档 ${keysDoc.join('')} vs 代码 ${keysCode.join('')}`);
 ok(keysDoc.join('') === keysCode.join(''), 'D11 文档的按键集合与 main.js 的 keydown 分支一一对应（谁也不能单方面多一个少一个）',
   `文档 ${keysDoc.join(' ')} · 代码 ${keysCode.join(' ')} · 只有文档有：${keysDoc.filter(k => !keysCode.includes(k)).join('') || '无'} · 只有代码有：${keysCode.filter(k => !keysDoc.includes(k)).join('') || '无'}`);
