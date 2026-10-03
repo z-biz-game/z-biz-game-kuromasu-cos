@@ -408,8 +408,8 @@ ok(bad.length === 0, 'D10 每一条 path:NN 引用都落在真实文件的行数
 const anchors = [
   ['js/engine/kuromasu.js', 72, 'createBoard'], ['js/engine/generate.js', 89, 'pruneClues'],
   ['js/engine/generate.js', 71, 'randomSolution'], ['js/main.js', 209, '提示次数'],
-  ['js/main.js', 376, 'function preview'], ['js/ui/game.js', 228, 'nextDeduction'],
-  ['js/ui/game.js', 128, 'refusal = null'], ['js/store.js', 92, 'best[tier]'],
+  ['js/main.js', 417, 'function preview'], ['js/ui/game.js', 252, 'nextDeduction'],
+  ['js/ui/game.js', 161, 'refusal = null'], ['js/store.js', 92, 'best[tier]'],
   ['js/render/board.js', 139, 'preview.value === OPEN'], ['tools/scenarios.js', 193, 'NO_CLUE'],
   ['tools/engine-test.mjs', 348, 'reachable'], ['tools/verify.sh', 24, 'CDP_PORT'],
 ];

@@ -18,6 +18,7 @@ import {
   setCell,
   snapshot,
   undo as undoState,
+  resetInk,
   solve,
   nextDeduction,
   verify,
@@ -56,6 +57,26 @@ export class Game {
     // state change: the engine never took the mark, so nothing here has to be rolled back.
     this.refusal = null;
     this.recompute();
+  }
+
+  // 重开**同一道题**：把这一局整个归零，题面不动。
+  //
+  // 陷阱就在这里：引擎的 resetInk() 只清了 st.cell 和 st.history，而撤销栈、步数、
+  // 提示次数、提示游标全都挂在 UI 这一层的 Game 实例上，它一个都碰不到。
+  // 只调 resetInk() 当重开，这半局的痕迹会原封不动地当成新局的开场白（实测
+  // steps 6 → 6、moves 6 → 6、hints 2 → 2、cursor 40 → 40），玩家还按得动撤销回到走错那一步。
+  resetAll() {
+    resetInk(this.st);       // st.cell 全回空 + 引擎 history 清空
+    this.steps = [];         // UI 撤销栈：resetInk 管不到，清的是引擎那份
+    this.moves = 0;          // 步数归零
+    this.hints = 0;          // 提示次数归零：提示要收钱，留着等于让玩家白嫖上一局的帮助
+    this.cursor = 0;         // 提示脚本从头再来，否则重开后第一条提示会被跳过
+    this.status = 'playing'; // 胜负回判：上一局赢了也不能把重开后的盘算成已通关
+    this.mode = BLACK;       // 临时态：落笔模式回到默认
+    this.lastHint = null;    // 上一条提示文案属于上一局
+    this.refusal = null;     // 上一条被拒的落笔连同它的理由，一并属于上一局
+    this.recompute();
+    return this;
   }
 
   // One call, four engine readouts. The renderer and every DOM stat read *these*; nobody
