@@ -41,7 +41,7 @@ node "$HERE/tools/sabotage.mjs" >/tmp/kuromasu-sabotage.log 2>&1 || {
 echo "sabotage: $(grep -c '^  红得住' /tmp/kuromasu-sabotage.log) 把刀把 doctest 弄红并点到了名 · $(grep '^  对照' /tmp/kuromasu-sabotage.log)"
 # 部署集闸：ci.yml 跑这两步、本地整闸以前一次都不跑。「本地全绿、线上 404 自己的 manifest /
 # sw.js / 图标」这一类坏法缺的就是这一步。它只 assemble 到临时目录，不碰 Chrome，所以放在这一档。
-node "$HERE/tools/deploy-set.mjs" >/tmp/kuromasu-deploy-set.log 2>&1 || {
+echo "=== deploy-set ==="; node "$HERE/tools/deploy-set.mjs" >/tmp/kuromasu-deploy-set.log 2>&1 || {
   echo "deploy-set FAILED：页面要取的东西不在部署产物里（详见 /tmp/kuromasu-deploy-set.log）" >&2
   grep -E '^  FAIL' /tmp/kuromasu-deploy-set.log | head -20 >&2
   tail -3 /tmp/kuromasu-deploy-set.log >&2
