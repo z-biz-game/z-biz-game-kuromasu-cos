@@ -386,11 +386,34 @@ ok(orderDoc >= 2 && orderCode, 'D9l 两份文档的 hints → moves → ms 排�
   `文档 ${orderDoc} 处 · 代码顺序${orderCode ? '一致存在' : '找不到'}`);
 
 // ---- D10 引用不漂：每一条 path:NN 都落在真实行数内，带锚点的还要真指到那个名字 ----
+const wordCache = new Map();
+// 落点原先是 `body.includes(token)`，这比它替掉的手抄锚点表更弱：`reachable` 会命中 `reachableFrom`、
+// `CDP_PORT` 会命中 `CDP_PORT_BASE`，于是引用真的漂到邻行那一天读出来的是绿。
+// 标识符形状的落点要求名字两侧不再是标识符字符；短语形状（`function preview`、`best[tier]`）不是标识符，
+// 没有可以蹭的邻居，留在子串上——两处口径不同是设计，不是漏。
+const hasWord = (text, name) => {
+  if (!wordCache.has(name)) {
+    wordCache.set(name, new RegExp('(^|[^A-Za-z0-9_$])' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^A-Za-z0-9_$])'));
+  }
+  return wordCache.get(name).test(text);
+};
+const isIdShape = (t) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(t);
 const RESOLVE = ['js', 'js/engine', 'js/ui', 'js/render', 'tools', 'css', '.'];
 const resolvePath = p => {
   if (existsSync(join(ROOT, p))) return p;
   for (const dir of RESOLVE) if (existsSync(join(ROOT, dir, p))) return join(dir, p);
   return null;
+};
+// 一条引用能犯的错有三样：文件不在树里、行号越界、被指的行段整段是空行。第三样是这一轮补的：
+// 在中间插几行之后 `:NN` 指的是空行，可它还在界内，只问「行号存在吗」的那道闸一路绿。
+const citeMiss = (raw, fromRaw, toRaw) => {
+  const p = resolvePath(raw);
+  if (!p) return `${raw}:${fromRaw}（文件不存在）`;
+  const src = read(p).split('\n');
+  const end = toRaw ? +toRaw : +fromRaw;
+  if (+fromRaw > src.length || end > src.length) return `${raw}:${fromRaw}${toRaw ? '-' + toRaw : ''}（${p} 只有 ${src.length} 行）`;
+  if (src.slice(+fromRaw - 1, end).join('').trim() === '') return `${raw}:${fromRaw}${toRaw ? '-' + toRaw : ''} 那几行整段是空行`;
+  return '';
 };
 const cites = [...DOCS.matchAll(/((?:tools\/|js\/)?[\w./-]+\.(?:js|mjs|cjs|sh|html)):(\d+)(?:-(\d+))?/g)];
 const citeMap = new Map();
@@ -398,13 +421,10 @@ const bad = [];
 for (const c of cites) {
   const p = resolvePath(c[1]);
   if (!p) { bad.push(`${c[1]}:${c[2]}（文件不存在）`); continue; }
-  const n = nlines(read(p));
-  const end = c[3] ? +c[3] : +c[2];
-  if (+c[2] > n || end > n) bad.push(`${c[1]}:${c[2]}${c[3] ? '-' + c[3] : ''}（${p} 只有 ${n} 行）`);
-  if (!citeMap.has(`${p}:${c[2]}`)) citeMap.set(`${p}:${c[2]}`, { p, start: +c[2], end });
+  const m = citeMiss(c[1], c[2], c[3]);
+  if (m) bad.push(m);
+  if (!citeMap.has(`${p}:${c[2]}`)) citeMap.set(`${p}:${c[2]}`, { p, start: +c[2], end: c[3] ? +c[3] : +c[2] });
 }
-ok(cites.length >= 12, `D10a 文档里的行号引用解析到 ${cites.length} 条（少于 12 条说明引用格式改了）`, `${cites.length} 条`);
-ok(bad.length === 0, 'D10 每一条 path:NN 引用都落在真实文件的行数内', bad.length ? `越界：${bad.join('，')}` : `${cites.length} 条全部在范围内`);
 const anchors = [
   ['js/engine/kuromasu.js', 72, 'createBoard'], ['js/engine/generate.js', 89, 'pruneClues'],
   ['js/engine/generate.js', 71, 'randomSolution'], ['js/main.js', 209, '提示次数'],
@@ -413,12 +433,41 @@ const anchors = [
   ['js/render/board.js', 139, 'preview.value === OPEN'], ['tools/scenarios.js', 193, 'NO_CLUE'],
   ['tools/engine-test.mjs', 348, 'reachable'], ['tools/verify.sh', 24, 'CDP_PORT'],
 ];
-for (const [file, line, token] of anchors) {
+const citedBody = (file, line) => {
   const hit = citeMap.get(`${file}:${line}`);
-  let body = '';
-  if (hit) body = read(hit.p).split('\n').slice(hit.start - 1, hit.end).join('\n');
-  ok(!!hit && body.includes(token), `D10b ${file}:${hit ? hit.start : '?'}${hit && hit.end !== hit.start ? '-' + hit.end : ''} 真的坐着 ${token}`,
-    hit ? `引用范围 ${hit.start}-${hit.end} ${body.includes(token) ? '含' : '不含'}「${token}」` : `文档没有引用 ${file}:${line}`);
+  return hit ? { hit, body: read(hit.p).split('\n').slice(hit.start - 1, hit.end).join('\n') } : null;
+};
+const anchorMiss = (body, token) => {
+  if (isIdShape(token)) return hasWord(body, token) ? '' : `那几行里没有整词 ${token}`;
+  return body.includes(token) ? '' : `那几行不含「${token}」`;
+};
+// 整词这一道自己带一把刀：把某个锚点名字截掉最后一格，截出来的串仍是被指那几行的**子串**、却不是整词。
+// 挑不出这样的靶子就等于口径退回子串（那一天所有候选都会「过」），所以这里当场红。
+const wordKnife = (() => {
+  for (const [file, line, token] of anchors) {
+    if (!isIdShape(token)) continue;
+    const c = citedBody(file, line);
+    if (!c) continue;
+    const cut = token.slice(0, -1);
+    if (cut.length < 3 || !c.body.includes(token) || !c.body.includes(cut)) continue;
+    if (anchorMiss(c.body, cut)) return `${file}:${line} 的 ${token} 截成 ${cut}：子串在、整词判漂`;
+  }
+  return '';
+})();
+// 空行那一道同样不许空转：靶子从本闸自己的文件里现量（写死的行号会在有人填了那一行那天停止测试）。
+const ownLines = read('tools/doctest.mjs').split('\n');
+let blankAt = 0;
+for (let i = 1; i < ownLines.length; i++) if (String(ownLines[i]).trim() === '') { blankAt = i + 1; break; }
+const blankKnife = blankAt ? citeMiss('tools/doctest.mjs', blankAt, null) : '';
+ok(cites.length >= 12 && !!wordKnife, `D10a 文档里的行号引用解析到 ${cites.length} 条（少于 12 条说明引用格式改了；整词那一道自己带一把截前缀的刀）`,
+  wordKnife ? `${cites.length} 条 · 刀：${wordKnife}` : `锚点里截不出前缀靶子 —— 整词这一道没被证明过（${anchors.length} 条锚点）`);
+ok(bad.length === 0 && !!blankKnife, 'D10 每一条 path:NN 引用都落在真实文件的行数内、且被指的那几行整段不许是空行（在界内不等于指到了代码；这一格自己带一把指向空行的刀）',
+  bad.length ? `越界/不存在/空行：${bad.join('，')}` : blankKnife ? `${cites.length} 条全部在范围内 · 刀：本闸第 ${blankAt} 行现量是空行，指过去判红` : '本闸自己的文件里现量不出空行靶子 —— 空行那一道没被证明过');
+for (const [file, line, token] of anchors) {
+  const c = citedBody(file, line);
+  const miss = c ? anchorMiss(c.body, token) : '文档没有引用这一处';
+  ok(!miss, `D10b ${file}:${c ? c.hit.start : '?'}${c && c.hit.end !== c.hit.start ? '-' + c.hit.end : ''} 真的坐着 ${token}`,
+    c ? `引用范围 ${c.hit.start}-${c.hit.end} ${miss ? '没坐住' : '坐着'}「${token}」${miss ? '：' + miss : ''}` : `文档没有引用 ${file}:${line}`);
 }
 const reachableAnchor = DESIGN.match(/([一二三四五六七八九十])条锚点/);
 const engRange = citeMap.get('tools/engine-test.mjs:348');
