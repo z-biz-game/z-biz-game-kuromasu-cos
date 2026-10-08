@@ -415,7 +415,7 @@ const citeMiss = (raw, fromRaw, toRaw) => {
   if (src.slice(+fromRaw - 1, end).join('').trim() === '') return `${raw}:${fromRaw}${toRaw ? '-' + toRaw : ''} 那几行整段是空行`;
   return '';
 };
-const cites = [...DOCS.matchAll(/((?:tools\/|js\/)?[\w./-]+\.(?:js|mjs|cjs|sh|html)):(\d+)(?:-(\d+))?/g)];
+const cites = [...DOCS.matchAll(/((?:tools\/|js\/)?[\w./-]+\.[A-Za-z][A-Za-z0-9]{0,11}):(\d+)(?:-(\d+))?/g)]; // 后缀不许写死：名单里没有的那个后缀，这条腿就永远读不到它，而「都核过了」照样打印
 const citeMap = new Map();
 const bad = [];
 for (const c of cites) {
@@ -476,12 +476,12 @@ const anchorCount = engRange ? [...read('tools/engine-test.mjs').split('\n').sli
 ok(!!reachableAnchor && CN[reachableAnchor[1]] === anchorCount && anchorCount === 4,
   `D10c 「四条锚点钉住方向」== 被引用的那一段里 reachable 的 eq 条数（${anchorCount}）`,
   reachableAnchor ? `文档 ${reachableAnchor[1]}条 vs 段内 ${anchorCount} 条` : '解析不到那句');
-const pathMentions = [...new Set((DOCS.match(/(?:tools|js|css)\/[\w./-]+\.(?:js|mjs|cjs|sh)/g) || []))];
+const pathMentions = [...new Set((DOCS.match(/(?:tools|js|css)\/[\w./-]+\.[A-Za-z][A-Za-z0-9]{0,11}/g) || []))]; // 后缀不许写死：名单里没有的那个后缀，这条腿就永远读不到它，而「都核过了」照样打印
 ok(pathMentions.length >= 8 && pathMentions.every(x => existsSync(join(ROOT, x))),
   `D10d 文档点名的 ${pathMentions.length} 个 tools/ 与 js/ 文件都还在树里（删掉一个工具就得同时删掉提到它的话）`,
   pathMentions.filter(x => !existsSync(join(ROOT, x))).join('，') || pathMentions.join(' '));
 const treeRows = [...README.slice(README.indexOf('## 目录'), README.indexOf('## 许可'))
-  .matchAll(/^(\S+\.(?:js|mjs|css|html|sh))\s{2,}/gm)].map(m => m[1]);
+  .matchAll(/^(\S+\.[A-Za-z][A-Za-z0-9]{0,11})\s{2,}/gm)].map(m => m[1]); // 后缀不许写死：名单里没有的那个后缀，这条腿就永远读不到它，而「都核过了」照样打印
 const treeBad = treeRows.filter(p => {
   const q = resolvePath(p);
   return !q || !read(q).trim();
