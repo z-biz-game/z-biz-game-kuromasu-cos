@@ -5,12 +5,19 @@
 let ctx = null;
 let master = null;
 let enabled = true;
-let built = 0;
+// 静音偏好：读回存档。放在模块顶层，这样每次 init（首屏、开局、重开）都拿到同一个答案，
+// 重开一局不会把玩家的静音选择洗掉。
+try {
+  if (localStorage.getItem('cos.mute') === '1') enabled = false;
+} catch { /* 读不到就沿用默认开声 */ }
+
 
 // 静音是真的把设备停下来：`enabled` 为假时这里直接给 null，于是 tone() 一个振荡器节点都不会建，
 // ctx 也留在 suspended。只把 master gain 设 0 是假静音——节点还在建、还在跑，只是听不见，
 // 而且它随时能被下一次调用顺手 resume 回来。
 function audio() {
+  // 静音态第一行就返回：既不把已挂起的 ctx 拉起来，也不新建节点。
+  // 这条比 "gain 设 0" 强一档——静音时这个 AudioContext 根本没有在跑。
   if (!enabled) return null;
   if (typeof AudioContext === 'undefined' && typeof webkitAudioContext === 'undefined') return null;
   if (!ctx) {
@@ -55,9 +62,21 @@ function tone({ f0, f1 = f0, dur = 0.12, type = 'sine', gain = 0.22, delay = 0 }
 export const Sound = {
   // 开关一按就落到 AudioContext 的状态上：开→resume，关→suspend。
   setEnabled(v) {
-    enabled = !!v;
-    if (enabled) Sound.resume();
-    else Sound.suspend();
+    const on = !!v;
+    if (on === enabled) return;
+    enabled = on;
+    // 真静音：停掉 AudioContext 本身（时钟停、图不跑），不是把音量拧到 0。
+    if (ctx) {
+      if (on) {
+        if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => {});
+      } else if (ctx.state === 'running' && ctx.suspend) {
+        ctx.suspend().catch(() => {});
+      }
+    }
+    // 偏好落盘：刷新页面后 init 要能读回静音态，不能自己弹回来。
+    try {
+      localStorage.setItem('cos.mute', on ? '1' : '0');
+    } catch { /* 隐私模式下写不进去也不该炸游戏 */ }
   },
   enabled: () => enabled,
   muted: () => !enabled,

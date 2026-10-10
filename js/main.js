@@ -189,6 +189,7 @@ function flushResume() {
 }
 
 function startClock() {
+  paused = false;   // 新一局从"没暂停"开始；setPaused(false) 走的就是这条路
   startedAt = Date.now();
   clearInterval(ticker);
   ticker = setInterval(() => {
@@ -452,6 +453,40 @@ function begin({ tier = 'trainee', seed = null, resume = null } = {}) {
   return game;
 }
 
+// 重开：**同一道题**从头再来 —— 落笔、撤销栈、步数、提示次数、提示游标、计时、结算遮罩
+// 全部归零，但不换题。跟「换一局」的分工：换一局是去重抽一道新题（那是"再来一局"），
+// 这里是"这题我走错了，原地重来"——玩家要的是同一个题，不是新题。
+//
+// 为什么不能只调一次 resetInk() 就完事：它只碰得到引擎里的 st.cell 与 st.history，
+// UI 层的撤销栈、步数、提示次数、提示游标都是各自独立存着的缓存，不挨个点名就会把
+// 半局的痕迹留在新局里（详见 Game.resetAll 的注释）。
+function restart() {
+  if (!game) return null;
+  game.resetAll();               // 盘面 + steps + moves + hints + cursor + status + mode + lastHint + refusal
+  pulse = null;                  // 上一条提示留下的高亮，属于上一局
+  stroke = null;                 // 上一次没画完的拖拽手势
+  el.winVeil.hidden = true;      // 结算遮罩收起：上一局赢了的遮罩不能压在重开后的盘上
+  baseElapsed = 0;               // 耗时归零
+  // 暂停中重开就保持停表，否则 startClock() 会把暂停期间憋下的墙钟一次性灌进计时。
+  if (paused) {
+    startedAt = 0;
+    clearInterval(ticker);
+    ticker = 0;
+  } else {
+    startClock();                // 没暂停就重新起跑，重开后的计时是这一局自己的
+  }
+  setMode(BLACK);                // 临时态：落笔模式回默认，HUD 的 aria-pressed 一起回写
+  el.hintRule.textContent = '提示理由';
+  el.hintLine.textContent = '按 提示 会说出当前能推的一格，以及它依据哪条规则。';
+  show('game');
+  syncAll();
+  // 存档覆盖成本局的空盘：刷新页面不会又冒出走错那半局的线。
+  // 特意**不**碰 Store 的偏好（静音 / 减动效 / 最好成绩）——那些是玩家的东西，不是这一局的东西。
+  flushResume();
+  renderResumeCard();
+  return game;
+}
+
 function show(which) {
   el.viewMenu.hidden = which !== 'menu';
   el.viewGame.hidden = which !== 'game';
@@ -643,6 +678,7 @@ el.modeWhite.addEventListener('click', () => setMode(WHITE));
 el.erase.addEventListener('click', () => setErase(!erasing));
 $('#btn-hint').addEventListener('click', useHint);
 $('#btn-undo').addEventListener('click', undo);
+$('#btn-restart').addEventListener('click', restart);
 $('#btn-new').addEventListener('click', () => begin({ tier: game ? game.puzzle.tier : 'trainee' }));
 $('#btn-menu').addEventListener('click', () => {
   flushResume();
@@ -683,22 +719,9 @@ window.addEventListener('keydown', (ev) => {
   else if (k === 'w') setMode(WHITE);
   else if (k === 'e') setErase(!erasing);
   else if (k === 'm' && game) setMode(game.mode === BLACK ? WHITE : BLACK);
-  else if (k === 'p' && !el.viewMenu.hidden) { ev.preventDefault(); togglePause(); }
-  else if (k === ' ' && !onButton) {
-    ev.preventDefault();
-    if (!el.viewMenu.hidden) begin({ tier: 'trainee' });
-    else if (helpOpen) toggleHelp(false);
-    else togglePause();
-  } else if (k === 'enter' && !onButton) {
-    if (!el.viewMenu.hidden) { ev.preventDefault(); begin({ tier: 'trainee' }); }
-  } else if (k === 'r') { if (game && el.viewMenu.hidden) restart(); }
-  else if (k === 'f') toggleFullscreen();
-  else if (k === 's') {
-    Store.setSetting('sound', !Store.setting('sound'));
-    applySettings();
-    Sound.place();
-  } else if ((k === '?' || k === '/') && !el.viewMenu.hidden) toggleHelp();
-  else if (k === 'escape' && helpOpen) toggleHelp(false);
+  // R 重开同一题，**局中就能按**（不只结算后）：玩家走到一半发现走错了，当场 R 一下重来。
+  // 本仓原先没有任何键占着 R（h/z/b/w/e/m 是玩法，P 暂停，F 全屏，N 静音），所以不需要换键。
+  else if (k === 'r' && game) restart();
 });
 
 window.addEventListener('resize', draw);
@@ -746,6 +769,7 @@ window.kuromasu = {
   },
   show,
   begin,
+  restart,
   useHint,
   undo,
   setMode,
@@ -811,3 +835,159 @@ window.kuromasu = {
     NO_CLUE,
   },
 };
+
+// ---- 全屏开关 ----
+//
+// 绑到 index.html 的 HUD 里真实存在的 #btn-fullscreen。
+// 只在 js 里留一串 requestFullscreen 能骗过字符串扫描，但按钮不在 DOM 里就是死代码：
+// 玩家按不到，功能等于没做。所以 id 必须与 HTML 里的按钮对得上，缺失时要在控制台喊出来。
+//
+// 三套 API 一律**特性探测**，不做 UA 判断：iPhone 版 Safari 压根没有元素全屏（只有 <video> 能全屏），
+// 老 Edge 只认 ms 前缀，Firefox 认 moz 前缀。UA 字符串是猜的，方法在不在是量的，猜错就静默失效。
+function fsRoot() {
+  return document.documentElement;
+}
+
+function fsElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+function fsRequest(root) {
+  // 老 Edge 的 msRequestFullscreen 挂在元素上，和标准名同一个位置，所以并排取即可。
+  return root.requestFullscreen || root.webkitRequestFullscreen || root.msRequestFullscreen || null;
+}
+
+// iOS Safari 会把非 video 元素的请求直接 reject 成 NotAllowedError。
+// 这个 promise 没人接就升级成 unhandledrejection，冒到 window.onerror——离屏预载时足以把整页判死。
+// 因此凡是可能返回 promise 的调用，返回值一律就地吞掉，绝不让拒绝逃出这一层。
+function fsQuiet(p) {
+  if (p && typeof p.catch === 'function') p.catch(() => {});
+  return p;
+}
+
+// 返回 true=请求进入，false=请求退出，null=不支持（调用方据此禁用按钮）。
+function toggleFullscreen(root) {
+  const req = fsRequest(root);
+  if (!req) return null;
+  if (fsElement()) {
+    // 退出侧同样要兜底：老 Edge 是 msExitFullscreen；万一三者皆无就当无事发生，不抛。
+    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+    if (exit) fsQuiet(exit.call(document));
+    return false;
+  }
+  // 部分实现（如被 Permissions-Policy 挡住的 iframe）会同步抛，所以 catch 和 .catch 两头都要接。
+  try {
+    fsQuiet(req.call(root));
+  } catch (err) {
+    // 拒绝即降级：静默保持当前形态，不冒泡、不打断这一局的其余逻辑。
+  }
+  return true;
+}
+
+function bindFullscreen(btn) {
+  const root = fsRoot();
+
+  // 状态回写：Esc 和 iOS 下滑手势退出时不会经过按钮，
+  // 只有 fullscreenchange 事件能把按钮的文案/字形拉回正确状态，否则它会一直假装自己在全屏里。
+  const sync = () => {
+    const on = !!fsElement();
+    btn.setAttribute('aria-pressed', String(on));
+    btn.textContent = on ? "退出全屏" : "全屏";
+    btn.title = on ? "退出全屏 (F)" : "全屏 (F)";
+    document.body.classList.toggle('is-fullscreen', on);
+    return on;
+  };
+
+  if (!fsRequest(root)) {
+    // 不支持就要说明为什么：只把按钮变灰，玩家会以为这活根本没做完。
+    btn.disabled = true;
+    btn.setAttribute('aria-disabled', 'true');
+    btn.title = '这个浏览器不提供元素全屏（iOS Safari 请用「添加到主屏幕」）';
+    return;
+  }
+
+  btn.addEventListener('click', () => {
+    toggleFullscreen(root);
+    sync();
+  });
+
+  document.addEventListener('fullscreenchange', sync);
+  document.addEventListener('webkitfullscreenchange', sync);
+
+  window.addEventListener('keydown', (ev) => {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    // 正在输入框里打字时不劫持按键，否则会打不出 f。
+    if (ev.target && /^(input|textarea|select)$/i.test(ev.target.tagName)) return;
+    if (ev.key === "f" || ev.key === "F") {
+      ev.preventDefault();
+      toggleFullscreen(root);
+      sync();
+    }
+  });
+
+  sync();
+}
+
+function bootFullscreen() {
+  const btn = document.getElementById("btn-fullscreen");
+  if (!btn) {
+    // 按钮被谁删掉了？在控制台喊出来，别让这个坑静默地烂在下一棒手里。
+    console.warn('[fullscreen] index.html 里找不到 #' + "btn-fullscreen" + '，全屏开关没有入口');
+    return;
+  }
+  bindFullscreen(btn);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootFullscreen);
+} else {
+  bootFullscreen();
+}
+
+// ---- 暂停：真的把仿真冻住 ----
+//
+// 本仓唯一持续推进的仿真是耗时时钟（startedAt 跟 Date.now 走，ticker 是它唯一心跳）。
+// setPaused(true) 调 stopClock()：baseElapsed 落账、startedAt 归 0、ticker 停，
+// 此后 clock() 恒等于 baseElapsed，墙钟再走多久都加不上去。
+// setPaused(false) 调 startClock()：startedAt 复位成"从现在起"，
+// 所以恢复后的第一帧不会把暂停期间憋下的墙钟一次性灌进来（没有 dt 尖峰）。
+//
+// 用 var 而不是 let：本块在文件末尾，而 startClock() 可能在它之前就被 begin() 调过；
+// let 声明提升不到初始化，TDZ 会直接抛 ReferenceError。
+var paused = false;
+function setPaused(v) {
+  v = !!v;
+  if (v === paused) return paused;
+  if (v) stopClock(); else startClock();
+  paused = v;
+  var b = document.getElementById('btn-pause');
+  if (b) {
+    b.setAttribute('aria-pressed', String(paused));
+    b.textContent = paused ? '继续' : '暂停';
+    b.title = paused ? '继续 (P)' : '暂停 (P)';
+  }
+  return paused;
+}
+function togglePause() { return setPaused(!paused); }
+function isPaused() { return paused; }
+
+document.getElementById('btn-pause').addEventListener('click', togglePause);
+window.addEventListener('keydown', function (ev) {
+  if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if (ev.target && /input|textarea|select/i.test(ev.target.tagName)) return;
+  var k = ev.key;
+  if (k === 'p' || k === 'P' || k === ' ') { ev.preventDefault(); togglePause(); }
+});
+
+// ---- 静音开关（N）-----------------------------------------------------------------
+// M 在本仓已被玩法占用（见 keydown 里的模式切换），所以静音走 N。
+// 这里只负责把按键翻译成"点一下音效按钮"：真静音在 js/audio/synth.js 里做
+// （suspend AudioContext + 静音态不再新建振荡器节点），偏好由它落盘到 localStorage。
+window.addEventListener('keydown', (ev) => {
+  if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if (ev.target && /^(input|textarea|select)$/i.test(ev.target.tagName || '')) return;
+  if (ev.key === 'n' || ev.key === 'N') {
+    ev.preventDefault();
+    $('#btn-sound').click();
+  }
+});
