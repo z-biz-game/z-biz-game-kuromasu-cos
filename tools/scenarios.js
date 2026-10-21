@@ -1061,7 +1061,11 @@
     eq('不读别的游戏的存档键', en.Store.setting('sound'), true);
     localStorage.removeItem('another-game.save.v1');
     en.Store.reset();
-    eq('清空存档后键还在但内容是默认', JSON.parse(localStorage.getItem('kuromasu.save.v1')).resume, null);
+    // 清空存档 = 把键删掉（不是写一份空壳）：存档改成两段式解码那一次有意这么改的，
+    // node 侧也补了对应断言（engine-test 的「reset 删的是键」）。
+    // 这一条原来是"键还在但内容是默认"——那是改动之前的老期望，那次提交只跑了 node 侧的闸，
+    // 浏览器侧这条被漏在这里了；本轮把它对齐，断言强度不变（仍然逐字检查清空后键的状态）。
+    eq('清空存档后键被删掉', localStorage.getItem('kuromasu.save.v1'), null);
     return report({ bytes: JSON.stringify(raw.resume).length });
   };
 

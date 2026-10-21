@@ -219,6 +219,8 @@ export const Store = {
 
   reset() {
     this.data = defaults();
+    // 清空存档 = 把键删掉，不是写一份空壳（两段式解码那一次有意这么改的，
+    // node 侧也补了对应断言：engine-test 的「reset 删的是键」）。
     try {
       localStorage.removeItem(KEY);
     } catch {
