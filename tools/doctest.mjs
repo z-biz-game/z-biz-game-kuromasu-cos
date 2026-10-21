@@ -427,11 +427,11 @@ for (const c of cites) {
 }
 const anchors = [
   ['js/engine/kuromasu.js', 72, 'createBoard'], ['js/engine/generate.js', 89, 'pruneClues'],
-  ['js/engine/generate.js', 71, 'randomSolution'], ['js/main.js', 209, '提示次数'],
-  ['js/main.js', 417, 'function preview'], ['js/ui/game.js', 252, 'nextDeduction'],
-  ['js/ui/game.js', 161, 'refusal = null'], ['js/store.js', 92, 'best[tier]'],
-  ['js/render/board.js', 139, 'preview.value === OPEN'], ['tools/scenarios.js', 193, 'NO_CLUE'],
-  ['tools/engine-test.mjs', 348, 'reachable'], ['tools/verify.sh', 24, 'CDP_PORT'],
+  ['js/engine/generate.js', 71, 'randomSolution'], ['js/store.js', 169, 'hints < cur.hints'],
+  ['js/main.js', 569, 'function preview'], ['js/ui/game.js', 252, 'nextDeduction'],
+  ['js/ui/game.js', 161, 'refusal = null'], ['js/store.js', 169, 'best[tier]'],
+  ['js/render/board.js', 191, 'preview.value === OPEN'], ['tools/scenarios.js', 193, 'NO_CLUE'],
+  ['tools/engine-test.mjs', 351, 'reachable'], ['tools/verify.sh', 24, 'CDP_PORT'],
 ];
 const citedBody = (file, line) => {
   const hit = citeMap.get(`${file}:${line}`);
@@ -470,7 +470,7 @@ for (const [file, line, token] of anchors) {
     c ? `引用范围 ${c.hit.start}-${c.hit.end} ${miss ? '没坐住' : '坐着'}「${token}」${miss ? '：' + miss : ''}` : `文档没有引用 ${file}:${line}`);
 }
 const reachableAnchor = DESIGN.match(/([一二三四五六七八九十])条锚点/);
-const engRange = citeMap.get('tools/engine-test.mjs:348');
+const engRange = citeMap.get('tools/engine-test.mjs:351');
 const anchorCount = engRange ? [...read('tools/engine-test.mjs').split('\n').slice(engRange.start - 1, engRange.end)
   ].filter(l => /eq\('[^']*', reachable\(/.test(l)).length : 0;
 ok(!!reachableAnchor && CN[reachableAnchor[1]] === anchorCount && anchorCount === 4,

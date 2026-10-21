@@ -208,6 +208,7 @@ function stopClock() {
 function syncPause() {
   el.pause.setAttribute('aria-pressed', String(paused));
   el.pause.textContent = paused ? '继续' : '暂停';
+  el.pause.title = paused ? '继续 (P)' : '暂停 (P)';
   el.pauseVeil.hidden = !paused;
   el.canvas.dataset.paused = paused ? 'yes' : 'no';
 }
@@ -234,51 +235,29 @@ function setPaused(on) {
 function togglePause() { return setPaused(!paused); }
 
 // 重开 = 同一个种子、同一个盘面，墨与代价全清；换一局 = 重新发牌。两件事分给两个键。
-function restart() {
-  if (!game) return null;
-  game = new Game(game.puzzle);
-  paused = false;
-  helpOpen = false;
-  pulse = null;
-  stroke = null;
-  baseElapsed = 0;
-  resetAnim(anim);
-  el.winVeil.hidden = true;
-  el.helpVeil.hidden = true;
-  setMode(BLACK);
-  syncPause();
-  startClock();
-  syncAll();
-  flushResume();
-  el.hintRule.textContent = '提示理由';
-  el.hintLine.textContent = '同一张牌重新开始：墨擦干净了，步数与提示也归零，盘面一个数字都没变。';
-  return game;
-}
+//
+// 这里原来还有一份 restart()：它 new 一个 Game 对象顶掉旧的。
+// 并线把两份并排放着 ⇒ 同名函数声明后定义者胜 ⇒ 文件后面那份（game.resetAll()）赢，
+// 这份成了死代码。留下的那一份更好：resetAll() 逐项点名 UI 层的账
+// （撤销栈 / 步数 / 提示次数 / 提示游标 / 上一次被拒的落笔），注释写在 Game.resetAll 里。
+// 两份原本各有对方没有的东西，都并进留下的那份：帮助面板与动画是这一份才管的。
 
-const fullscreenOn = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
-
+// 全屏的"是不是开着"只有这一份口径：取自文件末尾那套 fs* 帮手（三套前缀的特性探测）。
+//
+// 并线时这里还有一份自己的判断（fullscreenOn / toggleFullscreen），与末尾那份并存：
+// 同名函数声明后定义者胜 ⇒ 末尾那份赢 ⇒ 这里的 fullscreenOn 成了死代码，
+// 而末尾那份回写按钮时只动 aria-pressed 与文案、不动 title 与 body class ——
+// 两份各写一半，谁也不认谁（按钮文案与 title 会各说各话）。
+// 现在只留一份实现：这一份管"状态长什么样"，末尾那份管"怎么进怎么出"。
 function syncFullscreen() {
-  const on = fullscreenOn();
-  el.fullscreen.setAttribute('aria-pressed', String(on));
-  el.fullscreen.textContent = on ? '退出全屏' : '全屏';
-  return on;
-}
-
-function toggleFullscreen() {
-  const root = document.documentElement;
-  try {
-    if (fullscreenOn()) {
-      const exit = document.exitFullscreen || document.webkitExitFullscreen;
-      if (exit) Promise.resolve(exit.call(document)).catch(() => {});
-    } else {
-      const req = root.requestFullscreen || root.webkitRequestFullscreen;
-      if (!req) return false;
-      Promise.resolve(req.call(root, { navigationUI: 'hide' })).catch(() => {});
-    }
-  } catch {
-    /* 非手势调用会被策略挡下：挡下就还是不全屏，盘面不许因此断掉 */
+  const on = !!fsElement();
+  if (el.fullscreen) {
+    el.fullscreen.setAttribute('aria-pressed', String(on));
+    el.fullscreen.textContent = on ? '退出全屏' : '全屏';
+    el.fullscreen.title = on ? '退出全屏 (F)' : '全屏 (F)';
   }
-  return true;
+  document.body.classList.toggle('is-fullscreen', on);
+  return on;
 }
 
 function syncHelp() { el.helpVeil.hidden = !helpOpen; }
@@ -465,6 +444,9 @@ function restart() {
   game.resetAll();               // 盘面 + steps + moves + hints + cursor + status + mode + lastHint + refusal
   pulse = null;                  // 上一条提示留下的高亮，属于上一局
   stroke = null;                 // 上一次没画完的拖拽手势
+  helpOpen = false;              // 帮助面板盖着盘面：重开后玩家要先看到自己的新盘，不是说明页
+  el.helpVeil.hidden = true;
+  resetAnim(anim);               // 上一局的涟漪与迸溅也属于上一局
   el.winVeil.hidden = true;      // 结算遮罩收起：上一局赢了的遮罩不能压在重开后的盘上
   baseElapsed = 0;               // 耗时归零
   // 暂停中重开就保持停表，否则 startClock() 会把暂停期间憋下的墙钟一次性灌进计时。
@@ -669,7 +651,9 @@ el.canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
 
 el.pause.addEventListener('click', togglePause);
 el.restart.addEventListener('click', restart);
-el.fullscreen.addEventListener('click', toggleFullscreen);
+// #btn-fullscreen 的点击由文件末尾那份 bindFullscreen 绑（它还管 fullscreenchange 回写与 F 键）。
+// 这里再绑一条 ⇒ 一次点击进出各一次，净效果是"按了没反应"。
+// 同理，#btn-restart 那一条：el.restart 已经是同一个按钮，别再按 id 绑第二遍。
 $('#btn-resume-play').addEventListener('click', () => setPaused(false));
 $('#btn-help').addEventListener('click', () => toggleHelp(true));
 $('#btn-help-close').addEventListener('click', () => toggleHelp(false));
@@ -678,7 +662,6 @@ el.modeWhite.addEventListener('click', () => setMode(WHITE));
 el.erase.addEventListener('click', () => setErase(!erasing));
 $('#btn-hint').addEventListener('click', useHint);
 $('#btn-undo').addEventListener('click', undo);
-$('#btn-restart').addEventListener('click', restart);
 $('#btn-new').addEventListener('click', () => begin({ tier: game ? game.puzzle.tier : 'trainee' }));
 $('#btn-menu').addEventListener('click', () => {
   flushResume();
@@ -804,8 +787,8 @@ window.kuromasu = {
   paused: () => paused,
   phase,
   restart,
-  fullscreen: toggleFullscreen,
-  isFullscreen: fullscreenOn,
+  fullscreen: () => toggleFullscreen(fsRoot()),
+  isFullscreen: () => !!fsElement(),
   help: toggleHelp,
   anim: () => snapshot(anim),
   fx: (cell, opts) => fxAt(cell, opts),
@@ -889,14 +872,9 @@ function bindFullscreen(btn) {
 
   // 状态回写：Esc 和 iOS 下滑手势退出时不会经过按钮，
   // 只有 fullscreenchange 事件能把按钮的文案/字形拉回正确状态，否则它会一直假装自己在全屏里。
-  const sync = () => {
-    const on = !!fsElement();
-    btn.setAttribute('aria-pressed', String(on));
-    btn.textContent = on ? "退出全屏" : "全屏";
-    btn.title = on ? "退出全屏 (F)" : "全屏 (F)";
-    document.body.classList.toggle('is-fullscreen', on);
-    return on;
-  };
+  // 写回只有这一处（syncFullscreen）：原来这里自带一份、文件前面还有一份，
+  // 三份各写一半 ⇒ 按钮文案与 title 会各说各话。
+  const sync = () => syncFullscreen();
 
   if (!fsRequest(root)) {
     // 不支持就要说明为什么：只把按钮变灰，玩家会以为这活根本没做完。
@@ -929,7 +907,8 @@ function bindFullscreen(btn) {
 }
 
 function bootFullscreen() {
-  const btn = document.getElementById("btn-fullscreen");
+  // 按钮从 el 表里取：那张表是这张页面的 id 唯一清单。
+  const btn = el.fullscreen;
   if (!btn) {
     // 按钮被谁删掉了？在控制台喊出来，别让这个坑静默地烂在下一棒手里。
     console.warn('[fullscreen] index.html 里找不到 #' + "btn-fullscreen" + '，全屏开关没有入口');
@@ -946,37 +925,25 @@ if (document.readyState === 'loading') {
 
 // ---- 暂停：真的把仿真冻住 ----
 //
-// 本仓唯一持续推进的仿真是耗时时钟（startedAt 跟 Date.now 走，ticker 是它唯一心跳）。
-// setPaused(true) 调 stopClock()：baseElapsed 落账、startedAt 归 0、ticker 停，
-// 此后 clock() 恒等于 baseElapsed，墙钟再走多久都加不上去。
-// setPaused(false) 调 startClock()：startedAt 复位成"从现在起"，
-// 所以恢复后的第一帧不会把暂停期间憋下的墙钟一次性灌进来（没有 dt 尖峰）。
+// 暂停的实现（paused / setPaused / syncPause）在文件前面就有一份：它带「没有对局不许暂停」
+// 的护栏、会同步遮罩与提示文案、也会把这一局的进度写回存档。
+// 并线时这一块又带了一份自己的（var paused / setPaused(v) / togglePause）：
+// 同名声明后定义者胜 ⇒ 这一份赢 ⇒ 前面那份成了死代码；而这一份没有护栏
+// （在菜单上按 P 会把"没开局"标成暂停）、不遮罩、也不写存档。
+// 现在只留前面那份；这一块只留它独有的东西：**P 键与空格的快捷键**。
 //
-// 用 var 而不是 let：本块在文件末尾，而 startClock() 可能在它之前就被 begin() 调过；
-// let 声明提升不到初始化，TDZ 会直接抛 ReferenceError。
-var paused = false;
-function setPaused(v) {
-  v = !!v;
-  if (v === paused) return paused;
-  if (v) stopClock(); else startClock();
-  paused = v;
-  var b = document.getElementById('btn-pause');
-  if (b) {
-    b.setAttribute('aria-pressed', String(paused));
-    b.textContent = paused ? '继续' : '暂停';
-    b.title = paused ? '继续 (P)' : '暂停 (P)';
-  }
-  return paused;
-}
-function togglePause() { return setPaused(!paused); }
+// 空格有一处例外：焦点在按钮上时，空格是浏览器自己的「按下这个按钮」。
+// 抢过来 preventDefault 会让键盘玩家按空格打不开任何一个按钮——那是无障碍缺陷，
+// 不是快捷键设计（与前面那个 keydown 处理器对 Enter/空格的判断同一条道理）。
 function isPaused() { return paused; }
 
-document.getElementById('btn-pause').addEventListener('click', togglePause);
 window.addEventListener('keydown', function (ev) {
   if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
   if (ev.target && /input|textarea|select/i.test(ev.target.tagName)) return;
   var k = ev.key;
-  if (k === 'p' || k === 'P' || k === ' ') { ev.preventDefault(); togglePause(); }
+  var onButton = !!(ev.target && ev.target.tagName === 'BUTTON');
+  if (k === 'p' || k === 'P') { ev.preventDefault(); togglePause(); }
+  else if (k === ' ' && !onButton) { ev.preventDefault(); togglePause(); }
 });
 
 // ---- 静音开关（N）-----------------------------------------------------------------

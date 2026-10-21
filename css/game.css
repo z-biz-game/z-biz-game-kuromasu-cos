@@ -480,3 +480,71 @@ a[href],
   .brand { min-width: 0; }
   .top-actions { flex-wrap: wrap; row-gap: 6px; }
 }
+
+/* ---- 输入面：命中区、暂停与规则的遮罩 ----
+   并线时这一整段没有进合并后的 css/game.css，而合并后的 index.html 里
+   #pause-veil / #help-veil 还在、合并后的 js/main.js 还在切它们的 hidden
+   ⇒ 暂停遮罩与规则说明页**一点样式都没有**：它们不是覆盖层，是普通流里的两个块
+   —— 暂停时盘面被顶开，卡片和文字挤成一团（不遮罩也分层，看起来就是"坏了"）。
+   这一段把它补回来：与 #win-veil 同一套皮肤（同一层叠、同一卡片圆角），只不换颜色骗人。
+   safe-area 不在这里再让一次：上面已由 :root 的 --sat/--sar/--sab/--sal 中央分发过，
+   再让一次就是双倍空白。 */
+
+/* 触摸下限那条是全局 !important；"清空存档"这种文字链接不该被撑成 44 宽的方块，
+   但高度仍要够拇指。 */
+button.link { min-width: 0 !important; min-height: 28px !important; }
+
+#pause-veil,
+#help-veil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(11, 11, 13, 0.78);
+  border-radius: var(--radius-card);
+  animation: rise var(--dur-base) var(--ease-ease) both;
+}
+#pause-veil .veil-card { border-color: var(--accent); }
+.veil-card {
+  text-align: center;
+  padding: var(--space-card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-card);
+  background: var(--surface-lift);
+  max-width: 86%;
+}
+.veil-card h3 { margin: 0 0 6px; font-size: 19px; }
+.veil-card p { margin: 0 0 10px; font-size: 13px; color: var(--ink-dim); }
+.help-card { text-align: left; max-width: 92%; }
+.help-rules { margin: 0 0 12px; padding-left: 20px; font-size: 13px; color: var(--ink-dim); }
+.help-rules li { margin-bottom: 4px; }
+.help-rules b { color: var(--ink); }
+
+/* 减动效的 CSS 那一半：是真的另一套规则，不是把时长写成 0 让元素闪一下。
+   JS 那一半在 js/render/anim.js——涟漪与粒子根本不建。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  #win-veil,
+  #pause-veil,
+  #help-veil { animation: none; }
+}
+
+body.reduce-motion #win-veil,
+body.reduce-motion #pause-veil,
+body.reduce-motion #help-veil { animation: none; }
+
+/* 触屏上没有 hover：笔模式当前是哪一支必须由 data-mode/aria-pressed 说出来，
+   并且命中区在窄屏再放大一档，免得整排按钮被拇指挤到一起。 */
+@media (pointer: coarse) {
+  button,
+  .acts button,
+  .modes button,
+  .top-actions button { min-height: 48px; }
+}

@@ -5,6 +5,10 @@
 let ctx = null;
 let master = null;
 let enabled = true;
+// 建了多少个振荡器：静音态必须一个都不涨，这是本文件唯一诚实的自检。
+// 并线时这一行声明被裁掉了，而下面 tone() 里的 built++ 还在 ⇒ 第一次发声就抛
+// ReferenceError: built is not defined ⇒ 每一个音效都炸（而它是在落笔的路径上炸的）。
+let built = 0;
 // 静音偏好：读回存档。放在模块顶层，这样每次 init（首屏、开局、重开）都拿到同一个答案，
 // 重开一局不会把玩家的静音选择洗掉。
 try {

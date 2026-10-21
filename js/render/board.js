@@ -23,12 +23,15 @@ import { rippleFrac, rippleRadius, rippleAlpha, sparkOffset, age } from './anim.
 
 // 纹理与 sprite 都相对本模块解析：Pages 把这一盘发在 /z-biz-game-kuromasu-cos/ 前缀下，
 // 写死 '/assets/…' 会在前缀形态下 404（同组织已经因此红过一次）。
-const ASSET_BASE = new URL('../../assets/', import.meta.url);
-
-function loadImage(rel) {
+//
+// 路径写成**逐个文件的完整字面量**，而不是「目录基址 + 片段」：
+// 目录基址（new URL('../../assets/', import.meta.url)）在浏览器里是对的，但部署集闸
+// 只把以 '/' 结尾的引用当成「浏览器要取的那份文档」⇒ 去找 assets/index.html ⇒ 一条假红；
+// 逐个文件写字面量之后，闸验的是**那三张图本身**在不在产物里，比只验目录更实。
+function loadImage(url) {
   try {
     const img = new Image();
-    img.src = new URL(rel, ASSET_BASE).href;
+    img.src = url.href;
     return img;
   } catch {
     return null;
@@ -51,7 +54,11 @@ export class BoardView {
     this.geo = { cell: 0, x: 0, y: 0, w: 0, h: 0, dpr: 1 };
     // 三张图都是 assets/gen/make_art.py 现产的：纸纹铺在盘底、墨纹叠在被涂黑的格上、
     // 光爆 sprite 给提示与胜利。没加载完之前一律走纯色——纹理是牙，不是信息载体。
-    this.tex = { paper: loadImage('textures/paper-grain.png'), ink: loadImage('textures/ink-grain.png'), burst: loadImage('sprites/amber-burst.png') };
+    this.tex = {
+      paper: loadImage(new URL('../../assets/textures/paper-grain.png', import.meta.url)),
+      ink: loadImage(new URL('../../assets/textures/ink-grain.png', import.meta.url)),
+      burst: loadImage(new URL('../../assets/sprites/amber-burst.png', import.meta.url)),
+    };
     this.pat = {};
   }
 
