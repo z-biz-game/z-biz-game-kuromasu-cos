@@ -34,6 +34,12 @@ const nlines = t => (t.endsWith('\n') ? t.split('\n').length - 1 : t.split('\n')
 const README = read('README.md');
 const DESIGN = read('DESIGN.md');
 const DOCS = README + '\n' + DESIGN;
+// 引用腿的输入集不写死这两份：从 git 跟踪的 .md 现数。本仓还跟踪着 deliverable.md，
+// 它同样印了 `js/store.js:169`、`js/main.js:569` 这样的行号——名单写死时那几条目永远没人核，
+// 而「每一条 path:NN 都落在真实行数内」这句话照样打印。D10g 把这份名单本身钉住。
+const FACES = spawnSync('git', ['-C', ROOT, 'ls-files', '-z', '*.md'], { encoding: 'utf8' }).stdout
+  .split('\0').filter(Boolean);
+const CITE_TEXT = FACES.map(read).join('\n');
 const PKG = JSON.parse(read('package.json'));
 const CI = read('.github/workflows/ci.yml');
 const VERIFY = read('tools/verify.sh');
@@ -415,7 +421,8 @@ const citeMiss = (raw, fromRaw, toRaw) => {
   if (src.slice(+fromRaw - 1, end).join('').trim() === '') return `${raw}:${fromRaw}${toRaw ? '-' + toRaw : ''} 那几行整段是空行`;
   return '';
 };
-const cites = [...DOCS.matchAll(/((?:tools\/|js\/)?[\w./-]+\.[A-Za-z][A-Za-z0-9]{0,11}):(\d+)(?:-(\d+))?/g)]; // 后缀不许写死：名单里没有的那个后缀，这条腿就永远读不到它，而「都核过了」照样打印
+const CITE_RE = /((?:tools\/|js\/)?[\w./-]+\.[A-Za-z][A-Za-z0-9]{0,11}):(\d+)(?:-(\d+))?/g; // 后缀不许写死：名单里没有的那个后缀，这条腿就永远读不到它，而「都核过了」照样打印
+const cites = [...CITE_TEXT.matchAll(CITE_RE)];
 const citeMap = new Map();
 const bad = [];
 for (const c of cites) {
@@ -463,6 +470,10 @@ ok(cites.length >= 12 && !!wordKnife, `D10a 文档里的行号引用解析到 ${
   wordKnife ? `${cites.length} 条 · 刀：${wordKnife}` : `锚点里截不出前缀靶子 —— 整词这一道没被证明过（${anchors.length} 条锚点）`);
 ok(bad.length === 0 && !!blankKnife, 'D10 每一条 path:NN 引用都落在真实文件的行数内、且被指的那几行整段不许是空行（在界内不等于指到了代码；这一格自己带一把指向空行的刀）',
   bad.length ? `越界/不存在/空行：${bad.join('，')}` : blankKnife ? `${cites.length} 条全部在范围内 · 刀：本闸第 ${blankAt} 行现量是空行，指过去判红` : '本闸自己的文件里现量不出空行靶子 —— 空行那一道没被证明过');
+const faceCites = FACES.map(f => ({ f, n: [...read(f).matchAll(CITE_RE)].length }));
+ok(FACES.length >= 3 && faceCites.every(x => x.n > 0) && cites.length >= 12,
+  'D10g 引用腿的输入集当场从 git ls-files 现数，而每一份被跟踪的 .md 都真的贡献了引用（新增一份纸面不会静默落在对账之外；某份被跳过时这里红，而不是总条数悄悄变少）',
+  `git ls-files · ${FACES.length} 份：${faceCites.map(x => `${x.f}=${x.n}`).join(' · ')}`);
 for (const [file, line, token] of anchors) {
   const c = citedBody(file, line);
   const miss = c ? anchorMiss(c.body, token) : '文档没有引用这一处';

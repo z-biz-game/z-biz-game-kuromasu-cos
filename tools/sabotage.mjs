@@ -3,7 +3,7 @@
 // 用法：node tools/sabotage.mjs            跑全部刀
 //       node tools/sabotage.mjs S1 S3      只跑点名的几把（调试用；台账要的是整跑）
 //
-// 为什么要有这个文件：`node tools/doctest.mjs` 报 133 项全绿，只说明"这一轮文档没漂"，
+// 为什么要有这个文件：`node tools/doctest.mjs` 报 134 项全绿，只说明"这一轮文档没漂"，
 // 它没说**这把闸会不会红**。一把从没红过的闸和一把没接线的闸，输出是一模一样的。
 // 机制照 z-biz-game-kurotto-cos/tools/sabotage.mjs：内置几把刀，每把做一个最小扰动，
 // 跑目标闸，断言必须看到**预期的那一条 FAIL 行**（不是"rc 非 0"就行）；任何一把刀没能把闸
@@ -72,6 +72,17 @@ const KNIVES = [
     expect: 'D6g DESIGN 的 tries=25 == generate 的默认抽盘次数',
     detail: '文档 24 vs 代码 25',
     why: '生成器的常数不是"实现细节"：DESIGN 印的是它的现在值，改默认就得同时改文档。',
+  },
+  {
+    id: 'S5', where: '文档侧 · deliverable.md 里的行号引用漂到文件外',
+    file: 'deliverable.md',
+    needle: '`js/main.js:569`',
+    repl: '`js/main.js:99999`',
+    expect: 'D10 每一条 path:NN 引用都落在真实文件的行数内',
+    detail: 'js/main.js 只有 960 行',
+    why: 'deliverable.md 是这一轮才进对账输入集的面（D10g 把它和 README/DESIGN 一起从 git ls-files 现数）。' +
+      '这一把就是它的牙：把这一面里的一条行号改到界外，闸必须红并且报出这一面——' +
+      '改之前这条引用没人读过，改之后也不会有任何一格变红。',
   },
 ];
 
