@@ -37,8 +37,14 @@ const DOCS = README + '\n' + DESIGN;
 // 引用腿的输入集不写死这两份：从 git 跟踪的 .md 现数。本仓还跟踪着 deliverable.md，
 // 它同样印了 `js/store.js:169`、`js/main.js:569` 这样的行号——名单写死时那几条目永远没人核，
 // 而「每一条 path:NN 都落在真实行数内」这句话照样打印。D10g 把这份名单本身钉住。
-const FACES = spawnSync('git', ['-C', ROOT, 'ls-files', '-z', '*.md'], { encoding: 'utf8' }).stdout
-  .split('\0').filter(Boolean);
+const faceSrc = (() => {
+  const l = (spawnSync('git', ['-C', ROOT, 'ls-files', '-z', '*.md'], { encoding: 'utf8' }).stdout || '')
+    .split('\0').filter(Boolean);
+  return l.length
+    ? { from: 'git ls-files', faces: l }
+    : { from: 'readdirSync（问不到 git 索引：台账的副本树里没有 .git）', faces: readdirSync(ROOT).filter(f => f.endsWith('.md')) };
+})();
+const FACES = faceSrc.faces;
 const CITE_TEXT = FACES.map(read).join('\n');
 const PKG = JSON.parse(read('package.json'));
 const CI = read('.github/workflows/ci.yml');
@@ -472,8 +478,9 @@ ok(bad.length === 0 && !!blankKnife, 'D10 每一条 path:NN 引用都落在真�
   bad.length ? `越界/不存在/空行：${bad.join('，')}` : blankKnife ? `${cites.length} 条全部在范围内 · 刀：本闸第 ${blankAt} 行现量是空行，指过去判红` : '本闸自己的文件里现量不出空行靶子 —— 空行那一道没被证明过');
 const faceCites = FACES.map(f => ({ f, n: [...read(f).matchAll(CITE_RE)].length }));
 ok(FACES.length >= 3 && faceCites.every(x => x.n > 0) && cites.length >= 12,
-  'D10g 引用腿的输入集当场从 git ls-files 现数，而每一份被跟踪的 .md 都真的贡献了引用（新增一份纸面不会静默落在对账之外；某份被跳过时这里红，而不是总条数悄悄变少）',
-  `git ls-files · ${FACES.length} 份：${faceCites.map(x => `${x.f}=${x.n}`).join(' · ')}`);
+  'D10g 引用腿的输入集是当场现数的（问得到 git 就按被跟踪的 .md 名单，问不到就数仓根的 .md），而每一份面都真的贡献了引用'
+    + '（新增一份纸面不会静默落在对账之外；某份被跳过时这里红，而不是总条数悄悄变少）',
+  `现数自 ${faceSrc.from} · ${FACES.length} 份：${faceCites.map(x => `${x.f}=${x.n}`).join(' · ')}`);
 for (const [file, line, token] of anchors) {
   const c = citedBody(file, line);
   const miss = c ? anchorMiss(c.body, token) : '文档没有引用这一处';
