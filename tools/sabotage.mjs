@@ -79,7 +79,7 @@ const KNIVES = [
     needle: '`js/main.js:569`',
     repl: '`js/main.js:99999`',
     expect: 'D10 每一条 path:NN 引用都落在真实文件的行数内',
-    detail: 'js/main.js 只有 960 行',
+    detail: 'js/main.js 只有 961 行',
     why: 'deliverable.md 是这一轮才进对账输入集的面（D10g 把它和 README/DESIGN 一起从 git ls-files 现数）。' +
       '这一把就是它的牙：把这一面里的一条行号改到界外，闸必须红并且报出这一面——' +
       '改之前这条引用没人读过，改之后也不会有任何一格变红。',
