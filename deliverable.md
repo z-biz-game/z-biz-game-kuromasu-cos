@@ -12,7 +12,7 @@
 | 关卡 | 五档 × 若干盘，生成期由 `js/engine/generate.js` 出题、`js/engine/count.js` 逐格穷举复核唯一解 |
 | 依赖 | `dependencies` 0 个、`devDependencies` 0 个（`node -e` 实测，见下） |
 | 二进制资产 | 25 张位图（`icons/` 15 + `assets/` 10），无音频文件、无字体（音效由 WebAudio 合成） |
-| node 断言 | 240 条（`tools/engine-test.mjs`），fail 0；另有文档腿 `tools/doctest.mjs` 133 项 fail 0；破坏台账 4 把刀逐把点名变红 |
+| node 断言 | 240 条（`tools/engine-test.mjs`），fail 0；另有文档腿 `tools/doctest.mjs` 134 项 fail 0；破坏台账 5 把刀逐把点名变红 |
 | 浏览器断言 | 410 条，10 段（engine 53 / gen 42 / play 62 / ink 50 / hint 41 / stroke 25 / conflict 36 / save 25 / resume 32 / layout 44），fail 0 |
 | 验收命令 | `npm run check` · `npm test` · `node tools/doctest.mjs` · `node tools/sabotage.mjs` · `node tools/deploy-set.mjs` · `bash tools/verify.sh` |
 
@@ -82,10 +82,10 @@ $ git ls-files | grep -cE '\.(png|jpg|jpeg|mp3|wav|woff2?|ttf|svg)$'
 | `js/store.js` | 存档（两段式解码）、纪录、设置、续局 | `tools/engine-test.mjs` 240 条里的存档段；`@save` 25 条 + `@resume` 32 条 |
 | `css/game.css` | 全部样式（含补回来的遮罩与命中区） | `@layout` 44 条（命中盒量几何）；`@play` 的可见性断言 |
 | `index.html` | 壳：head（图标 / manifest / og / twitter）、顶栏、画布、HUD、面板、三个遮罩 | `node tools/deploy-set.mjs`（每个 href/src 都在产物里）；`@layout` |
-| `tools/doctest.mjs` | 文档现值的对表闸（133 项） | 自身末行 `rows: 133 fail: 0` |
+| `tools/doctest.mjs` | 文档现值的对表闸（134 项） | 自身末行 `rows: 134 fail: 0` |
 | `tools/scenarios.js` | 浏览器侧十个场景 | `tools/verify.sh` 每段打印的 `N checks, 0 failed` |
 | `tools/deploy-set.mjs` | 部署集闸（产物清单 / manifest / og / CI 接线） | 自身 `rows: 50 fail: 0` + `deploy-set-selftest.mjs` rc=0 |
-| `README.md` / `DESIGN.md` | 规模行、断言数、行号锚点 | 文档腿 133 项 + 破坏台账 4 把刀 |
+| `README.md` / `DESIGN.md` | 规模行、断言数、行号锚点 | 文档腿 134 项 + 破坏台账 5 把刀 |
 
 未改动但被本轮引用（写出来是为了说明它们**由谁验证**）：
 
@@ -139,8 +139,8 @@ $ git ls-files | grep -cE '\.(png|jpg|jpeg|mp3|wav|woff2?|ttf|svg)$'
 
 ```bash
 $ bash tools/verify.sh
-doctest: rows: 133 fail: 0
-sabotage: 4 把刀把 doctest 弄红并点到了名 ·   对照 · 无刀副本 doctest rc=0 rows: 133 fail: 0（红不是复制造出来的）
+doctest: rows: 134 fail: 0
+sabotage: 5 把刀把 doctest 弄红并点到了名 ·   对照 · 无刀副本 doctest rc=0 rows: 134 fail: 0（红不是复制造出来的）
 === deploy-set ===
 deploy-set: 部署集：31 条引用（含 3 张位图尺寸核对），失败 0 项
 boot: kuromasu 1.0.0 at http://127.0.0.1:5254/
@@ -165,7 +165,7 @@ VERIFY_RC=0
 |---|---|---|
 | `npm run check` | 0 | 每个源文件 `node --check` |
 | `npm test` | 0 | **240 条**断言，0 失败 |
-| `node tools/doctest.mjs` | 0 | **133 项**，0 失败 |
+| `node tools/doctest.mjs` | 0 | **134 项**，0 失败 |
 | `node tools/sabotage.mjs` | 0 | **4 把刀**，4 把点名变红；无刀副本 rc=0 |
 | `node tools/deploy-set.mjs` | 0 | **31 条引用** / **50 行**，失败 0 项 |
 | `node tools/deploy-set-selftest.mjs` | 0 | 每一刀都按预期发力 |
