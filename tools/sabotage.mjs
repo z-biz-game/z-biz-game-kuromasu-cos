@@ -3,7 +3,7 @@
 // 用法：node tools/sabotage.mjs            跑全部刀
 //       node tools/sabotage.mjs S1 S3      只跑点名的几把（调试用；台账要的是整跑）
 //
-// 为什么要有这个文件：`node tools/doctest.mjs` 报 134 项全绿，只说明"这一轮文档没漂"，
+// 为什么要有这个文件：`node tools/doctest.mjs` 报 137 项全绿，只说明"这一轮文档没漂"，
 // 它没说**这把闸会不会红**。一把从没红过的闸和一把没接线的闸，输出是一模一样的。
 // 机制照 z-biz-game-kurotto-cos/tools/sabotage.mjs：内置几把刀，每把做一个最小扰动，
 // 跑目标闸，断言必须看到**预期的那一条 FAIL 行**（不是"rc 非 0"就行）；任何一把刀没能把闸
@@ -83,6 +83,26 @@ const KNIVES = [
     why: 'deliverable.md 是这一轮才进对账输入集的面（D10g 把它和 README/DESIGN 一起从 git ls-files 现数）。' +
       '这一把就是它的牙：把这一面里的一条行号改到界外，闸必须红并且报出这一面——' +
       '改之前这条引用没人读过，改之后也不会有任何一格变红。',
+  },
+  {
+    id: 'S6', where: '文档侧 · README 把台账的刀数抄少一把',
+    file: 'README.md',
+    needle: '七把刀各写一类谎',
+    repl: '六把刀各写一类谎',
+    expect: 'D13b 面里抄的刀数',
+    detail: '不等的：README.md 六把刀=6',
+    why: 'S5 是这一轮加的第 5 把刀，加完 README 那三处「四把刀」一格都没回填，盘上就这么带着错的刀数发出去过：' +
+      '闸的项数有人钉，闸**自己被抄出去的规模**没人钉。这一把把谎照原样写回去一次，D13b 必须点名它。',
+  },
+  {
+    id: 'S7', where: '闸侧 · 把本闸钉的项数悄悄改小 1',
+    file: 'tools/doctest.mjs',
+    needle: 'const EXPECT_ROWS = 137;',
+    repl: 'const EXPECT_ROWS = 136;',
+    expect: 'D13c 本闸项数',
+    detail: '其后 3 条 = 137 项 · 钉 136',
+    why: 'D13a 那些格子拿这个钉当尺子：钉自己漂了，抄本反而"全对"。这一把把钉挪小 1（同字节数，不移行号），' +
+      '自钉那条必须红——否则「删一条断言不用改钉」这类谎又会静默通过。',
   },
 ];
 

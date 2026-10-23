@@ -530,6 +530,57 @@ ok(keysDoc.length >= 9 && keysCode.length >= 9,
 ok(keysDoc.join('') === keysCode.join(''), 'D11 文档的按键集合与 main.js 的 keydown 分支一一对应（谁也不能单方面多一个少一个）',
   `文档 ${keysDoc.join(' ')} · 代码 ${keysCode.join(' ')} · 只有文档有：${keysDoc.filter(k => !keysCode.includes(k)).join('') || '无'} · 只有代码有：${keysCode.filter(k => !keysDoc.includes(k)).join('') || '无'}`);
 
+// ---- D13 抄出去的闸读数：面里（连台账脚本自己）每一处「本闸项数 / 刀数」都必须是现在这一版的值 ----
+// 前面的行都在核「文档抄的代码现值」，这一节核的是**闸自己**被抄出去的数：一项断言从没被任何格子读过，
+// 所以「加了断言不回填」「删了断言不改锁」这两类谎在这一节之前都可以静默通过。
+// 只覆盖 doctest 自己的项数与 tools/sabotage.mjs 的刀数；deploy-set 的 rows: 50 与「31 条引用」不在这一节的
+// 靶面上（那是另一把闸的读数，本腿没有为它加锁——这条限制写在 README 的门禁段里）。
+// 这一节必须排在 D12（自审）之前：D12b 判的是「本文件写的每一个小节都已发出断言」，
+// 排在它后面的小节永远没机会被 emitted 看到，那条会恒红。
+const EXPECT_ROWS = 137;
+const SCALE_FACES = [...FACES, 'tools/sabotage.mjs'];
+const SCALE_G = [
+  /合计 (\d+) 项，0 项失败/g,
+  /doctest: rows: (\d+) fail: 0/g,
+  /无刀副本 doctest rc=0 rows: (\d+) fail: 0/g,
+  /自身末行 `rows: (\d+) fail: 0`/g,
+  /对表闸（(\d+) 项）/g,
+  /`tools\/doctest\.mjs` (\d+) 项 fail 0/g,
+  /文档腿 (\d+) 项/g,
+  /\*\*(\d+) 项\*\*，0 失败/g,
+  /doctest\.mjs` 报 (\d+) 项全绿/g,
+];
+const sizeCopies = [];
+for (const f of SCALE_FACES) {
+  const t = read(f).replace(/\n\s*/g, ' '); // 抄数在文档里会跨行折行：压平再对，否则折那一处逃过文法
+  for (const re of SCALE_G) for (const m of t.matchAll(re)) sizeCopies.push({ where: `${f} ${m[0]}`, n: +m[1] });
+}
+const badSize = sizeCopies.filter(c => c.n !== EXPECT_ROWS);
+ok(sizeCopies.length >= 8 && badSize.length === 0,
+  `D13a 面里抄的本闸项数（${SCALE_FACES.length} 份纸面 × ${SCALE_G.length} 条文法解析到 ${sizeCopies.length} 处）每一处都 == 闸里钉的 ${EXPECT_ROWS}（增/删一条 ok() 要把这个钉和每一处抄本一起改；把文法改到解析不出来，这里也红）`,
+  badSize.length ? `不等的：${badSize.map(c => `${c.where}=${c.n}`).join(' · ')}`
+    : `钉 ${EXPECT_ROWS} · 抄的 ${sizeCopies.map(c => c.n).join('/')} · 纸面 ${SCALE_FACES.join(' + ')}`);
+
+const cn2 = s => /^\d+$/.test(s) ? +s
+  : s.includes('十') ? (s[0] === '十' ? 1 : (CN[s[0]] || 0)) * 10 + (s.length > 1 ? (CN[s[s.length - 1]] || 0) : 0)
+  : (s === '两' ? 2 : CN[s]);
+const knifeIds = [...read('tools/sabotage.mjs').matchAll(/id: '(S\d+)'/g)].map(m => m[1]);
+const knifeCopies = [];
+for (const f of FACES) {
+  const t = read(f).replace(/\n\s*/g, ' ');
+  for (const m of t.matchAll(/([0-9]+|[一两二三四五六七八九十]+) ?把刀/g)) knifeCopies.push({ where: `${f} ${m[0]}`, n: cn2(m[1]) });
+}
+const badKnife = knifeCopies.filter(c => c.n !== knifeIds.length);
+ok(knifeCopies.length >= 8 && badKnife.length === 0,
+  `D13b 面里抄的刀数（散文「N 把刀」，解析到 ${knifeCopies.length} 处）每一处都 == 台账里现数的 ${knifeIds.length} 把（${knifeIds.join(' ')}）——加一把刀不回填文档，或把「几把刀」这种说法改成数不出来的形状，都红在这里`,
+  badKnife.length ? `不等的：${badKnife.map(c => `${c.where}=${c.n}`).join(' · ')}`
+    : `台账现数 ${knifeIds.length} · 抄的 ${knifeCopies.map(c => c.n).join('/')}`);
+
+// 本条之后还有 D12 的三条，所以钉的是 rows + 4：排在后面的节再加断言，这里会红而不是悄悄少一。
+ok(rows + 4 === EXPECT_ROWS,
+  `D13c 本闸项数 == 钉的 ${EXPECT_ROWS}（本条算第 ${rows + 1} 条，其后 D12 自审还有 3 条；D12c 那种 >= 的钉拦不住「某一节解析哑了但总数还够」，只有等式拦得住）`,
+  `本条之前 ${rows} 项 + 本条 + 其后 3 条 = ${rows + 4} 项 · 钉 ${EXPECT_ROWS}`);
+
 // ---- D12 本文件自审：写了的每一节都得真跑到（删掉一节就是红，不是"少了几行输出"）----
 const ownSections = [...new Set([...read('tools/doctest.mjs').matchAll(/^\/\/ ---- (D\d+)/gm)].map(m => m[1]))];
 ok(ownSections.length >= 10, `D12 自审这一节自己在跑（这一条是它唯一能自证的一次）`, `本文件写了 ${ownSections.length} 个小节`);

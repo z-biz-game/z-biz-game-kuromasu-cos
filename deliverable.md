@@ -12,7 +12,7 @@
 | 关卡 | 五档 × 若干盘，生成期由 `js/engine/generate.js` 出题、`js/engine/count.js` 逐格穷举复核唯一解 |
 | 依赖 | `dependencies` 0 个、`devDependencies` 0 个（`node -e` 实测，见下） |
 | 二进制资产 | 25 张位图（`icons/` 15 + `assets/` 10），无音频文件、无字体（音效由 WebAudio 合成） |
-| node 断言 | 240 条（`tools/engine-test.mjs`），fail 0；另有文档腿 `tools/doctest.mjs` 134 项 fail 0；破坏台账 5 把刀逐把点名变红 |
+| node 断言 | 240 条（`tools/engine-test.mjs`），fail 0；另有文档腿 `tools/doctest.mjs` 137 项 fail 0；破坏台账 7 把刀逐把点名变红 |
 | 浏览器断言 | 410 条，10 段（engine 53 / gen 42 / play 62 / ink 50 / hint 41 / stroke 25 / conflict 36 / save 25 / resume 32 / layout 44），fail 0 |
 | 验收命令 | `npm run check` · `npm test` · `node tools/doctest.mjs` · `node tools/sabotage.mjs` · `node tools/deploy-set.mjs` · `bash tools/verify.sh` |
 
@@ -82,10 +82,10 @@ $ git ls-files | grep -cE '\.(png|jpg|jpeg|mp3|wav|woff2?|ttf|svg)$'
 | `js/store.js` | 存档（两段式解码）、纪录、设置、续局 | `tools/engine-test.mjs` 240 条里的存档段；`@save` 25 条 + `@resume` 32 条 |
 | `css/game.css` | 全部样式（含补回来的遮罩与命中区） | `@layout` 44 条（命中盒量几何）；`@play` 的可见性断言 |
 | `index.html` | 壳：head（图标 / manifest / og / twitter）、顶栏、画布、HUD、面板、三个遮罩 | `node tools/deploy-set.mjs`（每个 href/src 都在产物里）；`@layout` |
-| `tools/doctest.mjs` | 文档现值的对表闸（134 项） | 自身末行 `rows: 134 fail: 0` |
+| `tools/doctest.mjs` | 文档现值的对表闸（137 项） | 自身末行 `rows: 137 fail: 0` |
 | `tools/scenarios.js` | 浏览器侧十个场景 | `tools/verify.sh` 每段打印的 `N checks, 0 failed` |
 | `tools/deploy-set.mjs` | 部署集闸（产物清单 / manifest / og / CI 接线） | 自身 `rows: 50 fail: 0` + `deploy-set-selftest.mjs` rc=0 |
-| `README.md` / `DESIGN.md` | 规模行、断言数、行号锚点 | 文档腿 134 项 + 破坏台账 5 把刀 |
+| `README.md` / `DESIGN.md` | 规模行、断言数、行号锚点 | 文档腿 137 项 + 破坏台账 7 把刀 |
 
 未改动但被本轮引用（写出来是为了说明它们**由谁验证**）：
 
@@ -103,7 +103,7 @@ $ git ls-files | grep -cE '\.(png|jpg|jpeg|mp3|wav|woff2?|ttf|svg)$'
 | `tools/balance.mjs` | 难度实测台（分位表 + 档位阶梯门禁） | `npm run balance` |
 | `tools/playtest.cjs` | 零依赖 CDP 驱动 | `tools/verify.sh` 每段的报告 |
 | `tools/verify.sh` | 一条命令一个结论（10 段浏览器闸） | 自身末行 `=== ALL GREEN ===` |
-| `tools/sabotage.mjs` | 破坏台账（刀只落在临时副本里） | 自身 `4 把刀把 doctest 弄红并点到了名` |
+| `tools/sabotage.mjs` | 破坏台账（刀只落在临时副本里） | 自身 `7 把刀把 doctest 弄红并点到了名` |
 | `tools/assemble-site.sh` | 部署产物的唯一清单 | 部署集闸调它 |
 | `server.cjs` `electron/main.cjs` `electron/preload.cjs` | 零依赖静态服务器 / 桌面壳 | 服务器：`verify.sh` 的端口与内容预检 + `@boot`；桌面壳：只有 `npm run check` 的语法门（见「需人接手」） |
 
@@ -139,8 +139,8 @@ $ git ls-files | grep -cE '\.(png|jpg|jpeg|mp3|wav|woff2?|ttf|svg)$'
 
 ```bash
 $ bash tools/verify.sh
-doctest: rows: 134 fail: 0
-sabotage: 5 把刀把 doctest 弄红并点到了名 ·   对照 · 无刀副本 doctest rc=0 rows: 134 fail: 0（红不是复制造出来的）
+doctest: rows: 137 fail: 0
+sabotage: 7 把刀把 doctest 弄红并点到了名 ·   对照 · 无刀副本 doctest rc=0 rows: 137 fail: 0（红不是复制造出来的）
 === deploy-set ===
 deploy-set: 部署集：31 条引用（含 3 张位图尺寸核对），失败 0 项
 boot: kuromasu 1.0.0 at http://127.0.0.1:5254/
@@ -165,8 +165,8 @@ VERIFY_RC=0
 |---|---|---|
 | `npm run check` | 0 | 每个源文件 `node --check` |
 | `npm test` | 0 | **240 条**断言，0 失败 |
-| `node tools/doctest.mjs` | 0 | **134 项**，0 失败 |
-| `node tools/sabotage.mjs` | 0 | **4 把刀**，4 把点名变红；无刀副本 rc=0 |
+| `node tools/doctest.mjs` | 0 | **137 项**，0 失败 |
+| `node tools/sabotage.mjs` | 0 | **7 把刀**，7 把点名变红；无刀副本 rc=0 |
 | `node tools/deploy-set.mjs` | 0 | **31 条引用** / **50 行**，失败 0 项 |
 | `node tools/deploy-set-selftest.mjs` | 0 | 每一刀都按预期发力 |
 | `bash tools/verify.sh` | **0** | 浏览器 **410 条**，10/10 份报告逐条对上 |
@@ -210,3 +210,28 @@ VERIFY_RC=0
 结论：除最后一条外，全部红都是并线把两侧拼在一起带进来的；最后一条是本地侧那次提交（`bd4e9f1`）改了「清空存档」的行为却漏同步浏览器侧那条期望留下的旧账，本轮一并对齐。
 
 基线 worktree `/tmp/kuroma-pre` 已用 `git worktree remove --force` 清掉。
+
+---
+
+## 闸自己被抄出去的规模（2026-10-23 补，D13 + S6/S7）
+
+这一节补的是**上一条腿够不着的那类谎**：文档抄代码的现值有人逐格对，文档抄**闸自己的读数**没人对。
+盘上（`4775bf4` 之后）就是这个形状——台账长到 5 把之后，README 的三处仍写「四」，本报告自己的
+退出码表与门禁清单那两格仍写 4，而项数的九处抄本全部停在改动前那一版（134）。没有任何一格因此变红：
+`D12c` 只钉 `rows >= 100`，总数少 30 条也照样绿。
+
+新增的一节排在 `D12` 自审之前（自审判的是「写下的每个小节都已发出断言」，排在它后面的小节永远看不见）：
+
+- `D13a` 面里抄的本闸项数 == 闸里钉的 `EXPECT_ROWS`。靶面是 4 份纸面 × 9 条文法：三份 .md 再加
+  `tools/sabotage.mjs` 的门禁注释（它自己就抄了一遍项数）；抄数在文档里跨行折行，所以压平再对。
+  这一条同时钉「解析到 8 处」这个下界——把文法改到解析不出来，等于让这一格悄悄失明，也红。
+- `D13b` 面里抄的把数 == 台账里现数的把数（`id: 'S\d+'` 现数，不是手抄名单）。中文数字与阿拉伯数字都收。
+- `D13c` 本闸项数 == 那个钉（等式，不是下界）。它排在最后三条之前，所以明细里写清「本条 + 其后 3 条」。
+- 台账 `S6`：把 README 抄的把数改小一把（7 → 6），必须红在 `D13b` 并报出 `不等的：README.md`。
+  `S7`：把闸自己钉的项数改小 1（同字节数、不移行号），必须红在 `D13c`。这两把各打一个新格子，
+  与既有 5 把的靶面不重叠。
+
+**这一节没有覆盖**：`tools/deploy-set.mjs` 的 `rows: 50 fail: 0` 与「31 条引用」是另一把闸的读数，
+本腿没有为它加锁；README 的门禁段也写明了这一点，别让读报告的人以为 D13 在替那两格背书。
+
+现读数：`node tools/doctest.mjs` 合计 137 项，0 项失败（改前 134 项 + 这一节的 3 条）。
