@@ -21,7 +21,7 @@
     icons/apple-touch-icon.png                iOS 桌面（180）
     icons/favicon-{32,16}.png                 小尺寸另走紧凑母题
     icons/icon-manifest.json                  这批文件的尺寸/字节/母题记录
-    assets/og-cover.png                       1200×630 社交卡
+    assets/og-cover.jpg                       1200×630 社交卡
     assets/textures/paper-grain.png           可平铺纸纹，画在盘面纸底上
     assets/textures/ink-grain.png             可平铺墨纹，画在被涂黑的格上
     assets/sprites/amber-burst.png            胜利/提示的琥珀光爆 sprite
@@ -626,20 +626,32 @@ def ui_glyph(name, size=96):
 
 # ---------------------------------------------------------------- 出货
 
-def read_ihdr(path):
+def read_size(path):
     with open(path, 'rb') as f:
-        head = f.read(24)
-    if head[:8] != b'\x89PNG\r\n\x1a\n':
-        raise AssertionError(f'{path} 不是 PNG')
-    w, h = struct.unpack('>II', head[16:24])
-    return w, h
+        blob = f.read()
+    if blob[:8] == b'\x89PNG\r\n\x1a\n':
+        return struct.unpack('>II', blob[16:24])
+    if blob[:2] == b'\xff\xd8':
+        i = 2
+        while i + 9 < len(blob):
+            if blob[i] != 0xFF:
+                i += 1
+                continue
+            marker = blob[i + 1]
+            if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                return (blob[i + 7] << 8) | blob[i + 8], (blob[i + 5] << 8) | blob[i + 6]
+            if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+                i += 2
+                continue
+            i += 2 + ((blob[i + 2] << 8) | blob[i + 3])
+    raise AssertionError(f'{path} 既不是 PNG 也不是 JPEG')
 
 
 def plan():
     rows = [f'icons/icon-{s}.png' for s in SIZES]
     rows += [f'icons/icon-maskable-{s}.png' for s in (512, 192)]
     rows += ['icons/apple-touch-icon.png', 'icons/favicon-32.png', 'icons/favicon-16.png',
-             'assets/og-cover.png', 'assets/textures/paper-grain.png', 'assets/textures/ink-grain.png',
+             'assets/og-cover.jpg', 'assets/textures/paper-grain.png', 'assets/textures/ink-grain.png',
              'assets/sprites/amber-burst.png']
     rows += [f'assets/ui/{g}.png' for g in GLYPHS]
     return rows
@@ -651,8 +663,11 @@ def build():
     def emit(rel, img, note=''):
         p = os.path.join(REPO, rel)
         os.makedirs(os.path.dirname(p), exist_ok=True)
-        img.save(p, 'PNG', optimize=True)
-        w, h = read_ihdr(p)
+        if rel.endswith('.jpg'):
+            img.convert('RGB').save(p, 'JPEG', quality=85, optimize=True, progressive=True, subsampling=0)
+        else:
+            img.save(p, 'PNG', optimize=True)
+        w, h = read_size(p)
         size = os.path.getsize(p)
         if size <= 0:
             raise AssertionError(f'{rel} 是 0 字节')
@@ -670,7 +685,7 @@ def build():
     emit('icons/apple-touch-icon.png', master.resize((180, 180), Image.LANCZOS), 'iOS 桌面')
     emit('icons/favicon-32.png', compact_icon(32), 'favicon')
     emit('icons/favicon-16.png', compact_icon(16), 'favicon')
-    emit('assets/og-cover.png', og_cover(), '社交卡')
+    emit('assets/og-cover.jpg', og_cover(), '社交卡')
     # 256 见方：盘面格子只有 26–62px，纹理是平铺用的，做 512 只是把首屏多压 250KB 的白噪声
     emit('assets/textures/paper-grain.png', runtime_paper(256), '可平铺纸纹（盘面上屏，去均值限幅 ±6）')
     emit('assets/textures/ink-grain.png', ink_grain_texture(256), '可平铺墨纹 RGBA（黑格上屏）')
@@ -709,7 +724,7 @@ def main():
     print(f"motif={man['motif']}  图标盘 clues={[(c['cell'], c['digit']) for c in man['iconBoard']['clues']]}")
     for r in man['files']:
         print(f"{r['path']:38s} {r['w']}x{r['h']:<5d} {r['bytes']:8d}B  {r['note']}")
-    print(f"共 {len(man['files'])} 张 PNG -> {REPO}")
+    print(f"共 {len(man['files'])} 张位图 -> {REPO}")
     return 0
 
 
